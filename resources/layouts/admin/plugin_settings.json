@@ -1,0 +1,568 @@
+{
+    "version": "1.0.0",
+    "layout_name": "plugin_settings",
+    "permissions": [
+        "core.plugins.update"
+    ],
+    "extends": "_admin_base",
+    "meta": {
+        "title": "$t:g7-ckeditor5-superpack.settings.title",
+        "description": "$t:g7-ckeditor5-superpack.settings.description"
+    },
+    "data_sources": [
+        {
+            "id": "settings",
+            "label_key": "$t:g7-ckeditor5-superpack.editor.data_source.settings",
+            "type": "api",
+            "endpoint": "/api/admin/plugins/{{route.identifier}}/settings",
+            "method": "GET",
+            "auto_fetch": true,
+            "auth_required": true,
+            "initLocal": "form",
+            "refetchOnMount": true
+        }
+    ],
+    "slots": {
+        "content": [
+            {
+                "id": "plugin_settings_content",
+                "type": "basic",
+                "name": "Div",
+                "dataKey": "form",
+                "trackChanges": true,
+                "props": { "className": "admin-page-content-responsive" },
+                "children": [
+                    {
+                        "id": "page_header",
+                        "type": "composite",
+                        "name": "PageHeader",
+                        "props": {
+                            "title": "$t:g7-ckeditor5-superpack.settings.title",
+                            "backPath": "/admin/plugins",
+                            "backLabel": "$t:admin.plugins.back_to_list"
+                        }
+                    },
+                    {
+                        "id": "notice_banner",
+                        "type": "basic",
+                        "name": "Div",
+                        "props": { "className": "alert-info" },
+                        "children": [
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex gap-3" },
+                                "children": [
+                                    {
+                                        "type": "basic",
+                                        "name": "Icon",
+                                        "props": { "name": "circle-info", "className": "text-xl text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" }
+                                    },
+                                    {
+                                        "type": "basic",
+                                        "name": "P",
+                                        "props": { "className": "text-info-soft" },
+                                        "text": "$t:g7-ckeditor5-superpack.settings.notice"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "validation_error",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.errors}}",
+                        "props": { "className": "alert-danger" },
+                        "children": [
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex gap-3" },
+                                "children": [
+                                    {
+                                        "type": "basic",
+                                        "name": "Icon",
+                                        "props": { "name": "triangle-exclamation", "className": "text-xl text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" }
+                                    },
+                                    {
+                                        "type": "basic",
+                                        "name": "Ul",
+                                        "if": "{{typeof _local.errors === 'object' && Object.keys(_local.errors).length > 0}}",
+                                        "props": { "className": "mt-1 list-disc list-inside space-y-1" },
+                                        "iteration": {
+                                            "source": "Object.entries(_local.errors ?? {}).flatMap(([field, messages]) => Array.isArray(messages) ? messages : [messages])",
+                                            "item_var": "message"
+                                        },
+                                        "children": [
+                                            { "type": "basic", "name": "Li", "props": { "className": "text-error-soft" }, "text": "{{message}}" }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "tab_bar",
+                        "type": "basic",
+                        "name": "Div",
+                        "props": { "className": "mt-6 flex gap-1 border-b border-gray-200 dark:border-gray-700" },
+                        "children": [
+                            {
+                                "id": "tab_btn_sns",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{(_local.ui?.tab ?? 'sns') === 'sns' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "sns" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.sns" }
+                                ]
+                            },
+                            {
+                                "id": "tab_btn_linkcard",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'linkcard' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "linkcard" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.linkcard" }
+                                ]
+                            },
+                            {
+                                "id": "tab_btn_video",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'video' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "video" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.video" }
+                                ]
+                            },
+                            {
+                                "id": "tab_btn_md",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'md' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "md" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.md" }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
+                        "id": "panel_sns",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{(_local.ui?.tab ?? 'sns') === 'sns'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            {
+                                "type": "basic",
+                                "name": "P",
+                                "props": { "className": "form-hint" },
+                                "text": "$t:g7-ckeditor5-superpack.settings.sns.intro"
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "sns_enabled", "type": "checkbox", "name": "sns_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "sns_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "sns_platform_group",
+                                "type": "basic",
+                                "name": "Div",
+                                "if": "{{_local.form.sns_enabled}}",
+                                "props": { "className": "pl-7 space-y-3 border-l-2 border-gray-100 dark:border-gray-700" },
+                                "children": [
+                                    { "type": "basic", "name": "P", "props": { "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.sns.platforms_label" },
+                                    {
+                                        "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                            { "type": "basic", "name": "Input", "props": { "id": "sns_youtube", "type": "checkbox", "name": "sns_youtube", "className": "h-4 w-4 rounded text-blue-600" } },
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "sns_youtube", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_youtube.label" }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                            { "type": "basic", "name": "Input", "props": { "id": "sns_twitter", "type": "checkbox", "name": "sns_twitter", "className": "h-4 w-4 rounded text-blue-600" } },
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "sns_twitter", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_twitter.label" }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                            { "type": "basic", "name": "Input", "props": { "id": "sns_instagram", "type": "checkbox", "name": "sns_instagram", "className": "h-4 w-4 rounded text-blue-600" } },
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "sns_instagram", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_instagram.label" }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                            { "type": "basic", "name": "Input", "props": { "id": "sns_tiktok", "type": "checkbox", "name": "sns_tiktok", "className": "h-4 w-4 rounded text-blue-600" } },
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "sns_tiktok", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_tiktok.label" }
+                                        ]
+                                    },
+                                    {
+                                        "id": "field_sns_shorts_ratio",
+                                        "type": "basic",
+                                        "name": "Div",
+                                        "props": { "className": "pt-2" },
+                                        "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "sns_shorts_ratio", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_shorts_ratio.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.sns_shorts_ratio.hint" },
+                                            {
+                                                "type": "basic", "name": "Select", "props": { "id": "sns_shorts_ratio", "name": "sns_shorts_ratio", "className": "mt-1 max-w-[10rem]" }, "children": [
+                                                    { "type": "basic", "name": "Option", "props": { "value": "9/16" }, "text": "9 : 16" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "1/1" }, "text": "1 : 1" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "4/5" }, "text": "4 : 5" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "16/9" }, "text": "16 : 9" }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
+                        "id": "panel_linkcard",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'linkcard'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            {
+                                "type": "basic",
+                                "name": "P",
+                                "props": { "className": "form-hint" },
+                                "text": "$t:g7-ckeditor5-superpack.settings.linkcard.intro"
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "linkcard_enabled", "type": "checkbox", "name": "linkcard_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "linkcard_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "linkcard_detail_group",
+                                "type": "basic",
+                                "name": "Div",
+                                "if": "{{_local.form.linkcard_enabled}}",
+                                "props": { "className": "pl-7 space-y-5 border-l-2 border-gray-100 dark:border-gray-700" },
+                                "children": [
+                                    {
+                                        "type": "basic", "name": "Div", "props": { "className": "flex items-start gap-3" }, "children": [
+                                            { "type": "basic", "name": "Input", "props": { "id": "linkcard_minimal_enabled", "type": "checkbox", "name": "linkcard_minimal_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                            {
+                                                "type": "basic", "name": "Div", "children": [
+                                                    { "type": "basic", "name": "Label", "props": { "htmlFor": "linkcard_minimal_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_minimal_enabled.label" },
+                                                    { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_minimal_enabled.hint" }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "linkcard_image_size", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_image_size.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_image_size.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "linkcard_image_size", "type": "number", "name": "linkcard_image_size", "min": 80, "max": 400, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "linkcard_ttl_ok_days", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_ttl_ok_days.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_ttl_ok_days.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "linkcard_ttl_ok_days", "type": "number", "name": "linkcard_ttl_ok_days", "min": 1, "max": 90, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "linkcard_ttl_fail_hours", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_ttl_fail_hours.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.linkcard_ttl_fail_hours.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "linkcard_ttl_fail_hours", "type": "number", "name": "linkcard_ttl_fail_hours", "min": 1, "max": 720, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
+                        "id": "panel_video",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'video'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            {
+                                "type": "basic",
+                                "name": "P",
+                                "props": { "className": "form-hint" },
+                                "text": "$t:g7-ckeditor5-superpack.settings.video.intro"
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "video_enabled", "type": "checkbox", "name": "video_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "video_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "video_detail_group",
+                                "type": "basic",
+                                "name": "Div",
+                                "if": "{{_local.form.video_enabled}}",
+                                "props": { "className": "pl-7 space-y-5 border-l-2 border-gray-100 dark:border-gray-700" },
+                                "children": [
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "video_max_mb", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_max_mb.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_max_mb.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "video_max_mb", "type": "number", "name": "video_max_mb", "min": 1, "max": 2048, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "video_chunk_mb", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_chunk_mb.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_chunk_mb.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "video_chunk_mb", "type": "number", "name": "video_chunk_mb", "min": 1, "max": 28, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "props": { "className": "space-y-2" }, "children": [
+                                            { "type": "basic", "name": "P", "props": { "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.video.formats_label" },
+                                            {
+                                                "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                                    { "type": "basic", "name": "Input", "props": { "type": "checkbox", "checked": true, "disabled": true, "className": "h-4 w-4 rounded text-blue-600 opacity-60" } },
+                                                    { "type": "basic", "name": "Span", "props": { "className": "text-sm text-gray-500 dark:text-gray-400" }, "text": "$t:g7-ckeditor5-superpack.settings.video.mp4_always" }
+                                                ]
+                                            },
+                                            {
+                                                "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                                    { "type": "basic", "name": "Input", "props": { "id": "video_allow_mov", "type": "checkbox", "name": "video_allow_mov", "className": "h-4 w-4 rounded text-blue-600" } },
+                                                    { "type": "basic", "name": "Label", "props": { "htmlFor": "video_allow_mov", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_allow_mov.label" }
+                                                ]
+                                            },
+                                            {
+                                                "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                                    { "type": "basic", "name": "Input", "props": { "id": "video_allow_webm", "type": "checkbox", "name": "video_allow_webm", "className": "h-4 w-4 rounded text-blue-600" } },
+                                                    { "type": "basic", "name": "Label", "props": { "htmlFor": "video_allow_webm", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_allow_webm.label" }
+                                                ]
+                                            },
+                                            {
+                                                "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                                    { "type": "basic", "name": "Input", "props": { "id": "video_allow_m4v", "type": "checkbox", "name": "video_allow_m4v", "className": "h-4 w-4 rounded text-blue-600" } },
+                                                    { "type": "basic", "name": "Label", "props": { "htmlFor": "video_allow_m4v", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_allow_m4v.label" }
+                                                ]
+                                            },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.video.codec_note" }
+                                        ]
+                                    },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "video_retention_days", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_retention_days.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.video_retention_days.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "video_retention_days", "type": "number", "name": "video_retention_days", "min": 0, "max": 3650, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
+                        "id": "panel_md",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'md'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.md.intro" },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "md_enabled", "type": "checkbox", "name": "md_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "md_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "md_detail_group",
+                                "type": "basic",
+                                "name": "Div",
+                                "if": "{{_local.form.md_enabled}}",
+                                "props": { "className": "pl-7 space-y-3 border-l-2 border-gray-100 dark:border-gray-700" },
+                                "children": [
+                                    { "type": "basic", "name": "P", "props": { "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.md.elements_label" },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_heading", "type": "checkbox", "name": "md_heading", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_heading", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_heading.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_bold", "type": "checkbox", "name": "md_bold", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_bold", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_bold.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_italic", "type": "checkbox", "name": "md_italic", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_italic", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_italic.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_list", "type": "checkbox", "name": "md_list", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_list", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_list.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_link", "type": "checkbox", "name": "md_link", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_link", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_link.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_code", "type": "checkbox", "name": "md_code", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_code", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_code.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_quote", "type": "checkbox", "name": "md_quote", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_quote", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_quote.label" }
+                                    ] },
+                                    { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.md.falsepos_note" }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
+                        "id": "footer_buttons",
+                        "type": "basic",
+                        "name": "Div",
+                        "props": { "className": "sticky-footer-buttons" },
+                        "children": [
+                            {
+                                "id": "cancel_button",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": { "className": "btn btn-secondary" },
+                                "actions": [
+                                    { "type": "click", "handler": "navigate", "params": { "path": "/admin/plugins" } }
+                                ],
+                                "children": [ { "type": "basic", "name": "Span", "text": "$t:common.cancel" } ]
+                            },
+                            {
+                                "id": "save_button",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "disabled": "{{!_local.hasChanges || _local.isSaving}}",
+                                    "className": "btn btn-primary flex-center gap-1.5"
+                                },
+                                "actions": [
+                                    {
+                                        "type": "click",
+                                        "handler": "sequence",
+                                        "actions": [
+                                            { "handler": "setState", "params": { "target": "local", "isSaving": true, "errors": null } },
+                                            {
+                                                "handler": "apiCall",
+                                                "auth_required": true,
+                                                "target": "/api/admin/plugins/{{route.identifier}}/settings",
+                                                "params": { "method": "PUT", "body": "{{_local.form}}" },
+                                                "onSuccess": [
+                                                    { "handler": "setState", "params": { "target": "local", "isSaving": false, "hasChanges": false } },
+                                                    { "handler": "toast", "params": { "type": "success", "message": "$t:admin.plugins.settings.save_success" } },
+                                                    { "handler": "refetchDataSource", "params": { "dataSourceId": "settings" } }
+                                                ],
+                                                "onError": [
+                                                    { "handler": "setState", "params": { "target": "local", "isSaving": false, "errors": "{{error.errors}}" } },
+                                                    { "handler": "toast", "params": { "type": "error", "message": "{{error.message ?? '$t:admin.plugins.settings.save_error'}}" } }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Icon", "if": "{{_local.isSaving}}", "props": { "name": "spinner", "className": "spinner-sm" } },
+                                    { "type": "basic", "name": "Span", "text": "{{_local.isSaving ? '$t:common.saving' : '$t:common.save'}}" }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "schema": {
+        "sns_enabled": { "type": "boolean", "default": true },
+        "sns_youtube": { "type": "boolean", "default": true },
+        "sns_twitter": { "type": "boolean", "default": true },
+        "sns_instagram": { "type": "boolean", "default": true },
+        "sns_tiktok": { "type": "boolean", "default": true },
+        "sns_shorts_ratio": { "type": "enum", "options": ["9/16", "1/1", "4/5", "16/9"], "default": "9/16" },
+        "linkcard_enabled": { "type": "boolean", "default": true },
+        "linkcard_minimal_enabled": { "type": "boolean", "default": true },
+        "linkcard_image_size": { "type": "integer", "default": 168 },
+        "linkcard_ttl_ok_days": { "type": "integer", "default": 7 },
+        "linkcard_ttl_fail_hours": { "type": "integer", "default": 24 },
+        "video_enabled": { "type": "boolean", "default": true },
+        "video_max_mb": { "type": "integer", "default": 200 },
+        "video_chunk_mb": { "type": "integer", "default": 20 },
+        "video_allow_mov": { "type": "boolean", "default": true },
+        "video_allow_webm": { "type": "boolean", "default": true },
+        "video_allow_m4v": { "type": "boolean", "default": false },
+        "video_retention_days": { "type": "integer", "default": 0 },
+        "md_enabled": { "type": "boolean", "default": true },
+        "md_heading": { "type": "boolean", "default": true },
+        "md_bold": { "type": "boolean", "default": true },
+        "md_italic": { "type": "boolean", "default": false },
+        "md_list": { "type": "boolean", "default": true },
+        "md_link": { "type": "boolean", "default": true },
+        "md_code": { "type": "boolean", "default": true },
+        "md_quote": { "type": "boolean", "default": true }
+    }
+}

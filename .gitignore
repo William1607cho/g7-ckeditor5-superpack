@@ -1,0 +1,29 @@
+# Composer
+/vendor/
+
+# Node (only if a build is ever added)
+/node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local / scratch
+*.bak
+*.bak-*
+*.local
+*.log
+
+# Runtime data — lives under the Gnuboard7 storage dir, never in the plugin repo
+# (site-specific settings, uploaded videos, chunk sessions, link-preview cache)
+/storage/
+**/setting.json
+*.mp4
+*.mov
+*.m4v
+*.webm

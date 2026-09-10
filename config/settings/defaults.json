@@ -1,0 +1,114 @@
+{
+    "_meta": {
+        "version": "1.0.0",
+        "description": "CKEditor 5 슈퍼팩 플러그인 환경설정 (SNS 임베드 / 외부 링크 카드 / 로컬 동영상 업로드 / 마크다운 자동 변환)"
+    },
+    "defaults": {
+        "sns_enabled": true,
+        "sns_youtube": true,
+        "sns_twitter": true,
+        "sns_instagram": true,
+        "sns_tiktok": true,
+        "sns_shorts_ratio": "9/16",
+        "linkcard_enabled": true,
+        "linkcard_minimal_enabled": true,
+        "linkcard_image_size": 168,
+        "linkcard_ttl_ok_days": 7,
+        "linkcard_ttl_fail_hours": 24,
+        "video_enabled": true,
+        "video_max_mb": 200,
+        "video_chunk_mb": 20,
+        "video_allow_mov": true,
+        "video_allow_webm": true,
+        "video_allow_m4v": false,
+        "video_retention_days": 0,
+        "md_enabled": true,
+        "md_heading": true,
+        "md_bold": true,
+        "md_italic": false,
+        "md_list": true,
+        "md_link": true,
+        "md_code": true,
+        "md_quote": true
+    },
+    "frontend_schema": {
+        "sns_enabled": {
+            "expose": true
+        },
+        "sns_youtube": {
+            "expose": true
+        },
+        "sns_twitter": {
+            "expose": true
+        },
+        "sns_instagram": {
+            "expose": true
+        },
+        "sns_tiktok": {
+            "expose": true
+        },
+        "sns_shorts_ratio": {
+            "expose": true
+        },
+        "linkcard_enabled": {
+            "expose": true
+        },
+        "linkcard_minimal_enabled": {
+            "expose": true
+        },
+        "linkcard_image_size": {
+            "expose": true
+        },
+        "linkcard_ttl_ok_days": {
+            "expose": false
+        },
+        "linkcard_ttl_fail_hours": {
+            "expose": false
+        },
+        "video_enabled": {
+            "expose": true
+        },
+        "video_max_mb": {
+            "expose": true
+        },
+        "video_chunk_mb": {
+            "expose": true
+        },
+        "video_allow_mov": {
+            "expose": true
+        },
+        "video_allow_webm": {
+            "expose": true
+        },
+        "video_allow_m4v": {
+            "expose": true
+        },
+        "video_retention_days": {
+            "expose": false
+        },
+        "md_enabled": {
+            "expose": true
+        },
+        "md_heading": {
+            "expose": true
+        },
+        "md_bold": {
+            "expose": true
+        },
+        "md_italic": {
+            "expose": true
+        },
+        "md_list": {
+            "expose": true
+        },
+        "md_link": {
+            "expose": true
+        },
+        "md_code": {
+            "expose": true
+        },
+        "md_quote": {
+            "expose": true
+        }
+    }
+}

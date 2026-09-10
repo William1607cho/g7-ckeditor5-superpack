@@ -1,0 +1,20 @@
+{
+    "name": "plugins/g7-ckeditor5-superpack",
+    "description": "SNS embeds, external link cards, local video upload and Markdown auto-convert for CKEditor 5 posts on Gnuboard7",
+    "type": "library",
+    "version": "1.0.0",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "William Cho"
+        }
+    ],
+    "require": {
+        "php": "^8.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Plugins\\G7\\Ckeditor5\\Superpack\\": ["src/", "./"]
+        }
+    }
+}

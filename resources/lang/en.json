@@ -1,0 +1,153 @@
+{
+    "content": {
+        "media_embed": {
+            "unsupported": "This embed is not supported. Showing a link instead.",
+            "view_on": "View on {platform}",
+            "open_link": "Open link"
+        },
+        "video": {
+            "open": "Open video source"
+        }
+    },
+    "editor": {
+        "data_source": {
+            "settings": "CKEditor 5 Superpack settings"
+        },
+        "video": {
+            "button": "Upload video",
+            "hint": "{exts} · up to {max}MB",
+            "uploading": "Uploading…",
+            "done": "Inserted. It will play in the post once saved.",
+            "err_ext": "Only MP4 files can be uploaded.",
+            "err_size": "File is too large (max {max}MB).",
+            "err_editor": "Editor not found. Please try again in a moment.",
+            "err_generic": "Upload failed.",
+            "library": "Video library",
+            "insert": "Insert",
+            "size_sm": "S",
+            "size_md": "M",
+            "size_lg": "L"
+        }
+    },
+    "settings": {
+        "title": "CKEditor 5 Superpack",
+        "description": "Turn each feature on or off and adjust its detailed options.",
+        "notice": "Turn each feature on or off and adjust its detailed options.",
+        "tabs": {
+            "sns": "SNS link embeds",
+            "linkcard": "External link cards",
+            "video": "Local video upload",
+            "md": "Markdown auto-convert"
+        },
+        "sns": {
+            "intro": "When a YouTube, X (Twitter), Instagram or TikTok link is pasted on its own line, it is shown as a playable embed on the visitor-facing page.",
+            "platforms_label": "Per-platform"
+        },
+        "linkcard": {
+            "intro": "Non-embed external links (news, blogs, etc.) are shown as a card with a thumbnail, title, summary and domain. The metadata is fetched server-side on the visitor's behalf."
+        },
+        "video": {
+            "intro": "An 'Upload video' button appears above the editor. Pick a file and it is uploaded in chunks; when done, a video player is inserted into the body right away (visible before you save). It also plays for visitors on the saved post. Files are stored in a folder separate from board attachments, and the container signature (MP4/MOV = ftyp, WebM = EBML) is checked so files with a faked extension are rejected.",
+            "formats_label": "Allowed extensions",
+            "mp4_always": ".mp4 (always allowed)",
+            "codec_note": "Whether a file plays depends on the browser's codec support. In particular, recent iPhone .mov files (HEVC / H.265) will not play in Firefox or older Chrome — this cannot be fixed without transcoding and is out of scope here. H.264-encoded .mp4 has the widest compatibility."
+        },
+        "fields": {
+            "sns_enabled": {
+                "label": "Enable SNS link embeds",
+                "hint": "When off, SNS links are left as plain links instead of being embedded."
+            },
+            "sns_youtube": {
+                "label": "YouTube (videos & Shorts)"
+            },
+            "sns_twitter": {
+                "label": "X (Twitter)"
+            },
+            "sns_instagram": {
+                "label": "Instagram (posts & Reels)"
+            },
+            "sns_tiktok": {
+                "label": "TikTok"
+            },
+            "sns_shorts_ratio": {
+                "label": "YouTube Shorts aspect ratio",
+                "hint": "Width:height ratio of the Shorts embed box. The real orientation cannot be known from the URL alone, so non-vertical Shorts get letterboxed."
+            },
+            "linkcard_enabled": {
+                "label": "Enable external link cards",
+                "hint": "When off, plain external links are left as-is instead of being turned into cards."
+            },
+            "linkcard_minimal_enabled": {
+                "label": "Show minimal cards",
+                "hint": "When no thumbnail or summary was obtained but a title was (e.g. a Cloudflare challenge page), show a favicon + title + domain minimal card. When off, such links are left as-is."
+            },
+            "linkcard_image_size": {
+                "label": "Card thumbnail size (px)",
+                "hint": "Square side length of the full card thumbnail. (80 - 400)"
+            },
+            "linkcard_ttl_ok_days": {
+                "label": "Success cache TTL (days)",
+                "hint": "How many days to reuse metadata for links that produced a card. After this it is re-fetched on the next view. (1 - 90)"
+            },
+            "linkcard_ttl_fail_hours": {
+                "label": "Failure cache TTL (hours)",
+                "hint": "How many hours before retrying links that failed or had no metadata. Shorter recovers from transient failures faster but hits the remote server more often. (1 - 720)"
+            },
+            "video_enabled": {
+                "label": "Enable local video upload",
+                "hint": "When off, the 'Upload video' button disappears from the editor and existing videos show as links instead of players."
+            },
+            "video_max_mb": {
+                "label": "Max file size (MB)",
+                "hint": "Maximum size of a single uploadable video. Unlimited is not allowed (disk protection); the hard cap is 2048 MB. (1 - 2048)"
+            },
+            "video_chunk_mb": {
+                "label": "Chunk size (MB)",
+                "hint": "Size of the pieces a large file is split into. Must be below the server upload limit (35 MB by default). Larger means fewer round-trips and a faster upload. (1 - 28, recommended 20)"
+            },
+            "video_allow_mov": {
+                "label": ".mov (QuickTime / iPhone)"
+            },
+            "video_allow_webm": {
+                "label": ".webm (web standard / VP8·VP9·AV1)"
+            },
+            "video_allow_m4v": {
+                "label": ".m4v"
+            },
+            "video_retention_days": {
+                "label": "Auto-delete retention (days, 0 = keep forever)",
+                "hint": "Default 0 — never auto-delete. Set 1+ to delete daily any video file not referenced by any post and older than this. Videos in use are never removed. (0 - 3650)"
+            },
+            "md_enabled": {
+                "label": "Enable markdown auto-convert",
+                "hint": "Convert markdown marks to real formatting when a visitor views the post. Turn it off for boards where users deliberately type `#`, `*` or `-`. Each element can be toggled below."
+            },
+            "md_heading": {
+                "label": "Headings — line-start `#` `##` `###` → Heading 1/2/3"
+            },
+            "md_bold": {
+                "label": "Bold — `**bold**` → bold"
+            },
+            "md_italic": {
+                "label": "Italic — `*italic*` → italic (off by default; easily confused with a stray `*` in prose)"
+            },
+            "md_list": {
+                "label": "Lists — `- item` or `1. item` on 2+ consecutive lines → bulleted / numbered list"
+            },
+            "md_link": {
+                "label": "Links — `[text](https://url)` → hyperlink"
+            },
+            "md_code": {
+                "label": "Code — `` `inline code` `` and fenced ``` code blocks"
+            },
+            "md_quote": {
+                "label": "Blockquote — line-start `> ` → quote block"
+            }
+        },
+        "md": {
+            "intro": "Text pasted from an AI assistant (ChatGPT, etc.) often keeps literal markdown marks like `##` or `**bold**` instead of real formatting. When this is on, those marks are turned into real formatting (headings, bold, lists, …) as the visitor views the post. The stored text is left untouched — conversion happens only at render time and never touches the editor.",
+            "elements_label": "Elements to convert",
+            "falsepos_note": "To limit false positives, only strict markdown in the form 'line start + mark + space + content' is converted. Lists need 2+ consecutive matching lines; bold/italic only match `**...**` not wrapped in whitespace. Paragraphs you already formatted in the editor (links, bold, …) are skipped."
+        }
+    }
+}
