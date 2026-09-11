@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-11
+
+### Added
+
+- **Editor style** — a new admin tab sets a site-wide base font size (12–28px) and
+  line height (1.2 / 1.4 / 1.6 / 1.8 / 2.0) for the post body, applied to both the
+  writing screen and the published post via a `.ck-content.prose` CSS rule. Off by
+  default, and already-published posts are affected too since the rule targets the
+  render class rather than stored content.
+  - An **Also apply to comments** option extends the same font size / line height to
+    rendered comments. Comments don't share the post body's `.ck-content`/`prose`
+    rendering path, so this targets the comment paragraph directly
+    (`p.text-gray-700.dark:text-gray-300`).
+  - Settings: master on/off, base font size, line height, apply-to-comments toggle.
+
 ## [1.0.0] - 2026-09-10
 
 ### Added

@@ -37,7 +37,8 @@
             "sns": "SNS link embeds",
             "linkcard": "External link cards",
             "video": "Local video upload",
-            "md": "Markdown auto-convert"
+            "md": "Markdown auto-convert",
+            "editorstyle": "Editor style"
         },
         "sns": {
             "intro": "When a YouTube, X (Twitter), Instagram or TikTok link is pasted on its own line, it is shown as a playable embed on the visitor-facing page.",
@@ -142,12 +143,31 @@
             },
             "md_quote": {
                 "label": "Blockquote — line-start `> ` → quote block"
+            },
+            "editor_style_enabled": {
+                "label": "Enable editor style",
+                "hint": "Changes the post body's base font size and line height to the values below. When off, the sirsoft-ckeditor5 default is shown."
+            },
+            "editor_font_size": {
+                "label": "Base font size (px)",
+                "hint": "Base font size for the post body (both the writing screen and the published post). Text with an explicit size set via the editor's own font-size tool is unaffected. (12 - 28)"
+            },
+            "editor_line_height": {
+                "label": "Line height (multiplier)",
+                "hint": "Spacing between lines in the body. 1.6 is a comfortable default for reading."
+            },
+            "editor_apply_to_comments": {
+                "label": "Also apply to comments",
+                "hint": "When on, the same font size and line height are also applied to comments. This may look different from the default sirsoft-basic comment style."
             }
         },
         "md": {
             "intro": "Text pasted from an AI assistant (ChatGPT, etc.) often keeps literal markdown marks like `##` or `**bold**` instead of real formatting. When this is on, those marks are turned into real formatting (headings, bold, lists, …) as the visitor views the post. The stored text is left untouched — conversion happens only at render time and never touches the editor.",
             "elements_label": "Elements to convert",
             "falsepos_note": "To limit false positives, only strict markdown in the form 'line start + mark + space + content' is converted. Lists need 2+ consecutive matching lines; bold/italic only match `**...**` not wrapped in whitespace. Paragraphs you already formatted in the editor (links, bold, …) are skipped."
+        },
+        "editorstyle": {
+            "intro": "Applies a site-wide base font size and line height to the post body editor. This also applies to already-published posts. By default it does not affect comments; turn on 'Also apply to comments' below to extend it to comments too."
         }
     }
 }

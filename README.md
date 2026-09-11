@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/github/v/release/William1607cho/g7-ckeditor5-superpack?sort=semver)](https://github.com/William1607cho/g7-ckeditor5-superpack/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds four render-time
+A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds five render-time
 enhancements to posts written with the **`sirsoft-ckeditor5`** editor — **without
 modifying the editor itself**:
 
@@ -16,9 +16,12 @@ modifying the editor itself**:
 4. **Markdown auto-convert** — literal markdown marks (`##`, `**bold**`, `- item`,
    pasted from an AI assistant, etc.) are turned into real formatting when the post is
    viewed. The stored text is left byte-for-byte unchanged.
+5. **Editor style** — a site-wide base font size and line height for the post body,
+   optionally extended to comments too.
 
 In every case the stored content is just plain `<a href>` links and the original
-text. All conversion happens on the visitor-facing page (and, for the editor button
+text (editor style is the exception — it's a CSS rule, not a content transform).
+All conversion happens on the visitor-facing page (and, for the editor button
 and media library, in the write screen) via one globally-loaded script. Each feature
 has its own on/off switch and detailed options in the admin screen.
 
@@ -96,7 +99,7 @@ kept identical and both are committed.
 ## Usage
 
 Open **Admin → Plugins → CKEditor 5 Superpack → Settings**
-(`/admin/plugins/g7-ckeditor5-superpack/settings`). Four tabs, one per feature.
+(`/admin/plugins/g7-ckeditor5-superpack/settings`). Five tabs, one per feature.
 
 ### 1. SNS embeds
 
@@ -209,10 +212,26 @@ a real `<a>` before the SNS / card passes see it.
 **Settings:** master on/off · a per-element on/off for each of the seven above (e.g.
 headings on, lists off).
 
+### 5. Editor style
+
+Sets a site-wide base font size (12–28px) and line height (1.2 / 1.4 / 1.6 / 1.8 /
+2.0) for the post body. Off by default; when on, it applies to the writing screen
+*and* the published post — including already-published posts, since it's a CSS rule
+targeting the render class rather than a content transform.
+
+Comments don't share the post body's `.ck-content`/`prose` rendering — they're
+rendered as plain text by sirsoft-board and promoted to HTML client-side by
+[`g7-comment-editor`](https://github.com/William1607cho/g7-comment-editor) when
+formatting is present. **Also apply to comments** extends the same font size / line
+height to the comment paragraph directly, so it's off by default and opt-in.
+
+**Settings:** master on/off · base font size (px) · line height (multiplier) ·
+also-apply-to-comments toggle.
+
 ## Settings screen
 
 **Admin → Plugins → CKEditor 5 Superpack → Settings** shows a short description line
-and four tabs, one per feature. Each tab has a master on/off switch at the top
+and five tabs, one per feature. Each tab has a master on/off switch at the top
 followed by that feature's detailed options:
 
 - **SNS embeds** — per-platform on/off (YouTube · X · Instagram · TikTok) and the
@@ -224,6 +243,8 @@ followed by that feature's detailed options:
   note.
 - **Markdown auto-convert** — a per-element on/off for headings, bold, italic (off by
   default), lists, links, code and blockquote.
+- **Editor style** — base font size, line height, and the also-apply-to-comments
+  toggle.
 
 ## Known limitations
 
@@ -242,7 +263,7 @@ followed by that feature's detailed options:
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
-**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 4개, 기능별로 하나씩.
+**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 5개, 기능별로 하나씩.
 
 - **SNS 임베드** — 본문에 YouTube·X·Instagram·TikTok 링크를 **한 줄에 단독으로** 붙여넣으면
   방문자 화면에서 임베드로 표시됩니다. 임베드 아래에는 항상 원문 링크 버튼이 남습니다.
@@ -259,6 +280,10 @@ followed by that feature's detailed options:
   바꿉니다. 본문 원문은 그대로 저장됩니다. 지원: 제목 / 굵게 / 기울임(기본 OFF) / 목록(2줄 이상
   연속) / 링크 / 코드 / 인용구, 요소별 온/오프. `#태그`(공백 없음)·`####`·단일 `- 문장`·`2024.`
   같은 것은 변환하지 않습니다.
+- **에디터 스타일** — 게시글 본문의 기본 글자크기(12~28px)·줄간격(1.2~2.0)을 사이트 전체에
+  일괄 적용합니다(기본 OFF). 이미 작성된 글에도 함께 적용됩니다. 댓글은 게시글 본문과 렌더링
+  경로가 달라(댓글은 텍스트로 저장되고 `g7-comment-editor` 가 클라이언트에서 서식을 승격) 기본
+  적용 대상이 아니며, "댓글에도 동일하게 적용" 옵션으로 opt-in 확장할 수 있습니다.
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
 

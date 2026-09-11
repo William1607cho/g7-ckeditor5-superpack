@@ -167,6 +167,21 @@
                                 "children": [
                                     { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.md" }
                                 ]
+                            },
+                            {
+                                "id": "tab_btn_editorstyle",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'editorstyle' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "editorstyle" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.editorstyle" }
+                                ]
                             }
                         ]
                     },
@@ -479,6 +494,84 @@
                     },
 
                     {
+                        "id": "panel_editorstyle",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'editorstyle'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.editorstyle.intro" },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "editor_style_enabled", "type": "checkbox", "name": "editor_style_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "editor_style_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_style_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_style_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "id": "editorstyle_detail_group",
+                                "type": "basic",
+                                "name": "Div",
+                                "if": "{{_local.form.editor_style_enabled}}",
+                                "props": { "className": "pl-7 space-y-3 border-l-2 border-gray-100 dark:border-gray-700" },
+                                "children": [
+                                    {
+                                        "id": "field_editor_font_size",
+                                        "type": "basic",
+                                        "name": "Div",
+                                        "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "editor_font_size", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_font_size.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_font_size.hint" },
+                                            { "type": "basic", "name": "Input", "props": { "id": "editor_font_size", "type": "number", "name": "editor_font_size", "min": 12, "max": 28, "className": "input mt-1 max-w-[10rem]" } }
+                                        ]
+                                    },
+                                    {
+                                        "id": "field_editor_line_height",
+                                        "type": "basic",
+                                        "name": "Div",
+                                        "props": { "className": "pt-2" },
+                                        "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "editor_line_height", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_line_height.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_line_height.hint" },
+                                            {
+                                                "type": "basic", "name": "Select", "props": { "id": "editor_line_height", "name": "editor_line_height", "className": "mt-1 max-w-[10rem]" }, "children": [
+                                                    { "type": "basic", "name": "Option", "props": { "value": "1.2" }, "text": "1.2" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "1.4" }, "text": "1.4" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "1.6" }, "text": "1.6" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "1.8" }, "text": "1.8" },
+                                                    { "type": "basic", "name": "Option", "props": { "value": "2.0" }, "text": "2.0" }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "id": "field_editor_apply_to_comments",
+                                        "type": "basic",
+                                        "name": "Div",
+                                        "props": { "className": "flex items-center gap-3 pt-2" },
+                                        "children": [
+                                            { "type": "basic", "name": "Input", "props": { "id": "editor_apply_to_comments", "type": "checkbox", "name": "editor_apply_to_comments", "className": "h-4 w-4 rounded text-blue-600" } },
+                                            {
+                                                "type": "basic", "name": "Div", "children": [
+                                                    { "type": "basic", "name": "Label", "props": { "htmlFor": "editor_apply_to_comments", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_apply_to_comments.label" },
+                                                    { "type": "basic", "name": "P", "props": { "className": "text-xs text-gray-500 dark:text-gray-400" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.editor_apply_to_comments.hint" }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
                         "id": "footer_buttons",
                         "type": "basic",
                         "name": "Div",
@@ -563,6 +656,10 @@
         "md_list": { "type": "boolean", "default": true },
         "md_link": { "type": "boolean", "default": true },
         "md_code": { "type": "boolean", "default": true },
-        "md_quote": { "type": "boolean", "default": true }
+        "md_quote": { "type": "boolean", "default": true },
+        "editor_style_enabled": { "type": "boolean", "default": false },
+        "editor_font_size": { "type": "integer", "default": 16 },
+        "editor_line_height": { "type": "enum", "options": ["1.2", "1.4", "1.6", "1.8", "2.0"], "default": "1.6" },
+        "editor_apply_to_comments": { "type": "boolean", "default": false }
     }
 }

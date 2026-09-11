@@ -5,11 +5,11 @@
         "ko": "CKEditor 5 슈퍼팩",
         "en": "CKEditor 5 Superpack"
     },
-    "version": "1.0.0",
+    "version": "1.1.0",
     "license": "MIT",
     "description": {
-        "ko": "CKEditor 5 로 작성한 게시글 본문에 SNS 임베드(YouTube·X·Instagram·TikTok), 외부 링크 카드화(OG 카드/최소 카드), 로컬 동영상 업로드, 마크다운 자동 변환 기능을 더합니다. 대부분 본문에 링크·텍스트를 붙여넣기만 하면 방문자 화면에서 알맞게 렌더됩니다. 각 기능은 개별적으로 켜고 끌 수 있으며, 세부 설정은 관리자 화면에서 조정합니다.",
-        "en": "Adds SNS embeds (YouTube, X, Instagram, TikTok), external link cards (OG / minimal card), local video upload, and automatic Markdown conversion to post bodies written with CKEditor 5. In most cases you just paste a link or text into the body and it renders appropriately on the visitor-facing page. Each feature can be turned on or off individually, with detailed options in the admin screen."
+        "ko": "CKEditor 5 로 작성한 게시글 본문에 SNS 임베드(YouTube·X·Instagram·TikTok), 외부 링크 카드화(OG 카드/최소 카드), 로컬 동영상 업로드, 마크다운 자동 변환, 에디터 스타일(글자크기·줄간격) 기능을 더합니다. 대부분 본문에 링크·텍스트를 붙여넣기만 하면 방문자 화면에서 알맞게 렌더됩니다. 각 기능은 개별적으로 켜고 끌 수 있으며, 세부 설정은 관리자 화면에서 조정합니다.",
+        "en": "Adds SNS embeds (YouTube, X, Instagram, TikTok), external link cards (OG / minimal card), local video upload, automatic Markdown conversion, and editor style (font size / line height) to post bodies written with CKEditor 5. In most cases you just paste a link or text into the body and it renders appropriately on the visitor-facing page. Each feature can be turned on or off individually, with detailed options in the admin screen."
     },
     "g7_version": ">=7.0.10",
     "dependencies": {

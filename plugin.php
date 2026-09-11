@@ -9,7 +9,7 @@ use App\Extension\Helpers\ExtensionMenuSyncHelper;
 /**
  * CKEditor 5 슈퍼팩 플러그인 (g7-ckeditor5-superpack)
  *
- * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 렌더 시점 기능 4가지를 더한다.
+ * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 렌더 시점 기능 5가지를 더한다.
  *
  *  1. **SNS 링크 자동 임베드** — 본문에 단독으로 붙여넣은 YouTube·X(Twitter)·Instagram·TikTok
  *     링크를 방문자 화면에서 각 플랫폼 임베드로 치환한다.
@@ -20,16 +20,27 @@ use App\Extension\Helpers\ExtensionMenuSyncHelper;
  *     본문에는 순수 링크만 저장한 뒤 방문자 화면에서 `<video controls>` 플레이어로 승격한다.
  *  4. **마크다운 자동 변환** — 저장된 본문의 `##`·`**굵게**` 같은 마크다운 기호를 방문자 화면에서
  *     실제 서식으로 바꾼다(원문 저장은 그대로, 편집기 안에서는 실행 안 함).
+ *  5. **에디터 스타일** — 게시글 본문(작성 화면+방문자 화면)의 기본 글자크기·줄간격을 전역
+ *     설정으로 조정한다. 게시글 본문은 `.ck-content.prose` 셀렉터로 적용되며, 댓글은
+ *     `.ck-content`/`prose` 경로를 타지 않고 `g7-comment-editor`가 클라이언트에서 승격시킨
+ *     `p.text-gray-700.dark:text-gray-300` 요소이므로 기본적으로 구조적으로 분리되고,
+ *     "댓글에도 적용" 옵션으로 선택적으로 확장할 수 있다.
  *
  * 아키텍처: 프론트 렌더 로직은 `loading.strategy = global` 로 전 페이지에 로드되는
  * `dist/js/plugin.iife.js` 가 `.ck-content` 를 자체 스캔(+MutationObserver)해 수행한다.
- * 편집 화면의 동영상 업로드 버튼·미디어 라이브러리는 `element.ckeditorInstance` 로 얹는다.
- * CKEditor 본체(`sirsoft-ckeditor5`)는 손대지 않는다 — 저장 데이터는 순수 `<a href>` 링크·원문
- * 텍스트이며, 이 플러그인이 방문자 화면에서만 임베드/카드/플레이어/서식으로 승격한다.
+ * 편집 화면의 동영상 업로드 버튼·미디어 라이브러리·에디터 스타일 마커는
+ * `element.ckeditorInstance` 로 얹는다. CKEditor 본체(`sirsoft-ckeditor5`)는
+ * 손대지 않는다 — 저장 데이터는 순수 `<a href>` 링크·원문 텍스트이며, 이 플러그인이
+ * 방문자 화면에서만 임베드/카드/플레이어/서식으로 승격한다.
  *
- * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 4개
- * (SNS 임베드 / 외부 링크 카드화 / 로컬 동영상 업로드 / 마크다운 자동 변환)에서 기능별로
- * 조정한다. 각 기능을 끄면 해당 스캔을 건너뛴다.
+ * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 5개
+ * (SNS 임베드 / 외부 링크 카드화 / 로컬 동영상 업로드 / 마크다운 자동 변환 /
+ * 에디터 스타일)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
+ *
+ * 참고: "이미지 복붙허용"(외부 이미지 URL 자동 재호스팅) 기능은 2026-09-11에 구현·
+ * 배포됐으나, 사이트별로 결과가 제각각임이 확인되어(정상 사이트는 성공, CORS 차단·
+ * 조용한 실패·원천 차단 등 사이트마다 다른 실패 양상) 안정성 미확보로 같은 날 롤백됐다.
+ * 재설계 전까지는 존재하지 않는다.
  */
 class Plugin extends AbstractPlugin
 {
@@ -50,11 +61,12 @@ class Plugin extends AbstractPlugin
     /**
      * 플러그인 설정 스키마 반환
      *
-     * 네 탭으로 나뉜다:
+     * 다섯 탭으로 나뉜다:
      *  - `sns_*`      : SNS 링크 임베드 (마스터 토글 + 플랫폼별 토글 + Shorts 비율)
      *  - `linkcard_*` : 외부 링크 카드화 (마스터 토글 + 최소 카드 토글 + 이미지 크기 + 캐시 TTL 2종)
      *  - `video_*`    : 로컬 동영상 업로드 (마스터 토글 + 최대 크기 + 청크 크기 + 확장자 토글 + 보관기간)
      *  - `md_*`       : 마크다운 자동 변환 (마스터 토글 + 요소별 토글 7종)
+     *  - `editor_*`   : 에디터 스타일 (마스터 토글 + 글자크기 + 줄간격 + 댓글에도 적용)
      *
      * @return array 설정 스키마
      */
@@ -267,6 +279,46 @@ class Plugin extends AbstractPlugin
                 ['ko' => '인용구 (`> 인용`)', 'en' => 'Blockquote (`> quote`)'],
                 ['ko' => '`> ` 로 시작하는 줄을 인용구로 변환합니다. 연속 줄은 한 인용구로 묶입니다.', 'en' => 'Converts lines starting with `> ` to a blockquote; consecutive lines are merged into one.'],
             ),
+            // ---- 탭 5: 에디터 스타일 ----
+            'editor_style_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '에디터 스타일 사용', 'en' => 'Enable Editor Style'],
+                ['ko' => '게시글 본문의 기본 글자크기·줄간격을 아래 값으로 바꿉니다. 끄면 sirsoft-ckeditor5 기본값 그대로 표시됩니다.', 'en' => "Changes the post body's base font size and line height to the values below. When off, the sirsoft-ckeditor5 default is shown."],
+            ),
+            'editor_font_size' => [
+                'type' => 'integer',
+                'default' => 16,
+                'min' => 12,
+                'max' => 28,
+                'label' => [
+                    'ko' => '기본 글자크기 (px)',
+                    'en' => 'Base Font Size (px)',
+                ],
+                'hint' => [
+                    'ko' => '게시글 본문(작성 화면·게시글 화면 양쪽)의 기본 글자크기입니다. 특정 글자에 직접 크기를 지정한 부분(에디터의 글자크기 도구로 개별 지정한 텍스트)은 이 값의 영향을 받지 않습니다. (12 ~ 28)',
+                    'en' => "Base font size for the post body (both the writing screen and the published post). Text with an explicit size set via the editor's own font-size tool is unaffected. (12 - 28)",
+                ],
+                'required' => false,
+            ],
+            'editor_line_height' => [
+                'type' => 'enum',
+                'options' => ['1.2', '1.4', '1.6', '1.8', '2.0'],
+                'default' => '1.6',
+                'label' => [
+                    'ko' => '줄간격 (배수)',
+                    'en' => 'Line Height (multiplier)',
+                ],
+                'hint' => [
+                    'ko' => '본문 줄과 줄 사이 간격입니다. 1.6이 기본적으로 읽기 편한 값입니다.',
+                    'en' => 'Spacing between lines in the body. 1.6 is a comfortable default for reading.',
+                ],
+                'required' => false,
+            ],
+            'editor_apply_to_comments' => $this->booleanSetting(
+                false,
+                ['ko' => '댓글에도 동일하게 적용', 'en' => 'Also Apply to Comments'],
+                ['ko' => '켜면 댓글 영역에도 같은 글자크기·줄간격이 적용됩니다. sirsoft-basic 댓글 스타일과 다르게 보일 수 있습니다.', 'en' => 'When on, the same font size and line height are also applied to comments. This may look different from the default sirsoft-basic comment style.'],
+            ),
         ];
     }
 
@@ -304,6 +356,10 @@ class Plugin extends AbstractPlugin
             'md_link' => true,
             'md_code' => true,
             'md_quote' => true,
+            'editor_style_enabled' => false,
+            'editor_font_size' => 16,
+            'editor_line_height' => '1.6',
+            'editor_apply_to_comments' => false,
         ];
     }
 
