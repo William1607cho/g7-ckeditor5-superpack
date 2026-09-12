@@ -5,6 +5,8 @@ namespace Plugins\G7\Ckeditor5\Superpack;
 use App\Enums\ExtensionOwnerType;
 use App\Extension\AbstractPlugin;
 use App\Extension\Helpers\ExtensionMenuSyncHelper;
+use Plugins\G7\Ckeditor5\Superpack\Http\Middleware\CorrectDownloadFilenameExtension;
+use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
 
 /**
  * CKEditor 5 슈퍼팩 플러그인 (g7-ckeditor5-superpack)
@@ -30,8 +32,15 @@ use App\Extension\Helpers\ExtensionMenuSyncHelper;
  *     본문에 삽입한다. 재호스팅(외부 URL 재요청) 방식이 아니라 클립보드가 이미 들고 있는
  *     바이너리를 CKEditor5 표준 `uploadImage` 커맨드로 그대로 넘기는 방식이라 사이트별
  *     성공률 편차가 없다(과거 버전의 URL 재호스팅 방식은 안정성 문제로 폐기됨, 아래
- *     "주의" 참고). 부가로 PNG→WebP 자동 변환 옵션을 함께 제공한다 — 자세한 내용과
- *     **중요한 제약**은 아래 참고.
+ *     "참고" 항목). 부가로 PNG→WebP 자동 변환 옵션을 함께 제공한다 —
+ *     `ImagePasteWebpConversionListener`(필터 훅 8개 구독) +
+ *     `ImagePasteWebpConverter`(Imagick 기반 인코딩 엔진) +
+ *     `CorrectDownloadFilenameExtension`(다운로드 파일명 확장자 보정 미들웨어)
+ *     세 클래스가 이 플러그인 안에서 완결돼 있다 — 이 플러그인만 설치해도 두 토글
+ *     (`imagepaste_enabled`/`imagepaste_webp_enabled`) 전부 실제로 동작한다(v1.2.1
+ *     이전에는 변환 엔진이 g7 코어에 직접 패치돼 있어 이 플러그인만 다른 사이트에
+ *     설치하면 WebP 변환 체크박스가 조용히 무동작이었다 — v1.2.1에서 전부 이 플러그인
+ *     쪽으로 옮기며 코어 패치를 완전히 제거했다).
  *
  * 아키텍처: 프론트 렌더 로직은 `loading.strategy = global` 로 전 페이지에 로드되는
  * `dist/js/plugin.iife.js` 가 `.ck-content` 를 자체 스캔(+MutationObserver)해 수행한다.
@@ -41,24 +50,16 @@ use App\Extension\Helpers\ExtensionMenuSyncHelper;
  * `<img>` 자체를 표준 업로드 파이프라인으로 저장)이며, 이 플러그인이 방문자 화면에서만
  * 임베드/카드/플레이어/서식으로 승격한다.
  *
+ * 서버 측(이미지 복붙 한정)도 g7 코어·`sirsoft-ckeditor5`·벤더 모듈(`sirsoft-board`/
+ * `sirsoft-page`)을 전혀 수정하지 않는다 — `getHookListeners()`가 그 쪽들이 이미
+ * 제공하는 필터 훅(`*.filter_upload_file`)을 구독해 변환을 끼워 넣고,
+ * `getMiddleware()`가 응답 헤더만 보고 다운로드 파일명을 보정한다. 리사이즈
+ * (`App\Support\ImageResizer::resizeInPlace()`)만 g7 코어의 정식 업스트림 기능
+ * (v7.0.6+)이라 그대로 쓴다 — 이 플러그인이 재구현하지 않는다.
+ *
  * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 6개
  * (SNS 임베드 / 외부 링크 카드화 / 로컬 동영상 업로드 / 마크다운 자동 변환 /
  * 에디터 스타일 / 이미지 복붙)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
- *
- * **중요 — "PNG→WebP 자동 변환"(`imagepaste_webp_enabled`) 설정의 이식성 제약**:
- * 이 설정 자체(저장·조회·관리자 UI)는 이 플러그인 안에 완전히 포함돼 있어 어느 g7
- * 사이트에 설치해도 정상 동작한다. 그러나 이 설정을 실제로 "소비"해 PNG를 WebP로
- * 재인코딩하는 코드(`App\Support\ImageResizer::convertPngToWebpInPlace()`)는 이
- * 플러그인 패키지에 포함돼 있지 않다 — g7 코어(`app/Services/AttachmentService.php` 등)
- * 와 `sirsoft-ckeditor5` 플러그인 쪽에 추가해야 하는 **별도의 서버 패치**로 구현돼
- * 있으며, 이 패치는 현재 atozai(william-cho.com) 사이트에만 반영돼 있다. 즉 이 플러그인을
- * 그대로 다른 g7 사이트에 설치하면 "PNG→WebP 자동 변환" 체크박스는 화면에 나타나고
- * 저장도 되지만, 그 값을 읽어 실제로 동작을 바꾸는 코드가 없어 **아무 효과도 없다**
- * (에러도 나지 않고 조용히 무동작 — 설정 자체가 UI 이상의 의미를 갖지 않는 상태).
- * 이 제약을 다른 설치 환경에 이식하려면 core `ImageResizer`에 동일한 메서드를 추가하고
- * 업로드 파이프라인 각 지점에서 호출하도록 별도 작업이 필요하다(이번 릴리스 범위 밖).
- * "클립보드 이미지 자동 업로드" 설정(`imagepaste_enabled`)은 이런 제약이 없다 —
- * CKEditor5 표준 API만 쓰므로 `sirsoft-ckeditor5` 의존성만 충족하면 어디서든 동작한다.
  *
  * 참고(과거 이력): "이미지 복붙허용"이라는 이름으로 외부 이미지 URL을 서버가 대신
  * 재요청해 재호스팅하는 방식이 2026-09-11에 먼저 시도됐으나, 사이트별로 결과가
@@ -93,7 +94,7 @@ class Plugin extends AbstractPlugin
      *  - `md_*`         : 마크다운 자동 변환 (마스터 토글 + 요소별 토글 7종)
      *  - `editor_*`     : 에디터 스타일 (마스터 토글 + 글자크기 + 줄간격 + 댓글에도 적용)
      *  - `imagepaste_*` : 이미지 복붙 (클립보드 자동 업로드 토글 + PNG→WebP 변환 토글,
-     *                     둘은 서로 독립 — 후자는 이식성 제약 있음, 클래스 상단 docblock 참고)
+     *                     둘은 서로 독립 — 둘 다 이 플러그인 안에서 완결됨, 클래스 상단 docblock 참고)
      *
      * @return array 설정 스키마
      */
@@ -470,6 +471,67 @@ class Plugin extends AbstractPlugin
                 'command' => 'g7-ckeditor5-superpack:prune-videos --scheduled',
                 'schedule' => 'daily',
                 'description' => '만료된 동영상 업로드 세션 + (옵트인 시) 미참조 동영상 파일 정리',
+            ],
+        ];
+    }
+
+    /**
+     * 플러그인 훅 리스너 목록 반환.
+     *
+     * `ImagePasteWebpConversionListener` 하나가 "이미지 복붙" 탭의
+     * `imagepaste_webp_enabled` 설정을 8개 이미지 업로드 경로(게시글 에디터·g7
+     * 코어 첨부 2종·벤더 모듈 5종)에 공통 적용한다 — 상세는 그 클래스의 docblock
+     * 참고. v1.2.1에서 이 리스너를 신설하며 g7 코어에 직접 넣었던 동등 로직
+     * (`App\Support\ImageResizer::convertPngToWebpInPlace()` 등)을 전부 제거했다.
+     *
+     * @return array<int, class-string>
+     */
+    public function getHookListeners(): array
+    {
+        return [
+            ImagePasteWebpConversionListener::class,
+        ];
+    }
+
+    /**
+     * 플러그인 미들웨어 선언 반환.
+     *
+     * `CorrectDownloadFilenameExtension`이 PNG→WebP 변환된 이미지를 내려줄 때
+     * `Content-Disposition` 파일명 확장자가 실제 내용(Content-Type)과 어긋나지
+     * 않도록 보정한다(v1.2.0에서 발견된 실사고 — Content-Type은 webp인데
+     * 다운로드 파일명은 .png로 나가 사용자가 "변환 안 됐다"고 오인). 응답
+     * 헤더만 보고 판단하므로 대상 라우트를 전혀 수정하지 않고도 동작한다 —
+     * 전부 다른 플러그인/모듈/코어 소속 라우트라 'self'가 아니라 정확한
+     * 라우트명으로 하나씩 지정한다:
+     *
+     *  - `sirsoft-ckeditor5`의 이미지 서빙(게시글 본문 에디터 이미지)
+     *  - g7 코어의 첨부 다운로드 + 템플릿 레이아웃 첨부 서빙
+     *  - `sirsoft-board`의 게시판 첨부 다운로드/미리보기(일반 + 관리자)
+     *  - `sirsoft-page`의 페이지 첨부 다운로드/미리보기
+     *
+     * (v1.2.0 시점에는 board·page 쪽은 "훅이 없어 못 고침"으로 남겨뒀던
+     * 잔여 이슈였다 — 이 미들웨어는 응답 헤더만 보므로 훅 유무와 무관하게
+     * 전부 커버한다. `sirsoft-ecommerce`의 카테고리/상품/리뷰 이미지는 이
+     * 방식의 `Content-Disposition`을 쓰지 않는 것으로 확인돼 대상에서 제외했다.)
+     *
+     * @return array<int, array{class: class-string, groups: array<int, string>, targets: array<int, string>}>
+     */
+    public function getMiddleware(): array
+    {
+        return [
+            [
+                'class' => CorrectDownloadFilenameExtension::class,
+                'groups' => ['api'],
+                'targets' => [
+                    'api.plugins.sirsoft-ckeditor5.api.sirsoft-ckeditor5.images.serve',
+                    'api.attachment.download',
+                    'api.public.templates.layout-attachment-file',
+                    'api.modules.sirsoft-board.boards.attachment.download',
+                    'api.modules.sirsoft-board.boards.attachment.preview',
+                    'api.modules.sirsoft-board.admin.board.attachments.download',
+                    'api.modules.sirsoft-page.pages.attachment.download',
+                    'api.modules.sirsoft-page.pages.attachment.preview',
+                ],
             ],
         ];
     }

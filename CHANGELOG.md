@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-12
+
+### Changed
+
+- **PNG→WebP conversion is now fully self-contained in this plugin — no core
+  patch required.** In 1.2.0 the conversion engine
+  (`App\Support\ImageResizer::convertPngToWebpInPlace()`) and the download-filename
+  fix lived outside this package, in Gnuboard7 core and in `sirsoft-ckeditor5`; the
+  `imagepaste_webp_enabled` toggle was a silent no-op without that patch. Both are
+  now implemented inside the plugin (`ImagePasteWebpConverter`,
+  `ImagePasteWebpConversionListener`, `CorrectDownloadFilenameExtension`) and wired
+  in purely through filter hooks the host code already exposes and a scoped
+  response middleware — no other plugin, module, or core file is modified. The
+  matching core patch has been fully reverted on the reference install (verified
+  byte-identical to the pristine upstream `sirsoft-ckeditor5` source after
+  reverting). This is an internal restructuring; behavior and settings are
+  unchanged for existing installs.
+- As a side effect, the download-filename fix now also covers `sirsoft-board` and
+  `sirsoft-page` attachment downloads/previews, which 1.2.0 could not reach (no
+  filter hook existed at those serve points; the new middleware works from
+  response headers alone, so it doesn't need one).
+
 ## [1.2.0] - 2026-09-12
 
 ### Added

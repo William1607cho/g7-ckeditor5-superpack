@@ -59,6 +59,9 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 - The **`sirsoft-board`** module is needed only for the *video auto-delete* option
   (it looks up whether a video is still referenced by any post body). Every other
   feature works without it, and the option is off by default.
+- PHP extension **`imagick`** (optional) — needed only for the *PNG→WebP auto-convert*
+  option. If it's not loaded, that option is a silent no-op (PNGs are stored as-is);
+  every other feature is unaffected.
 
 ## Installation
 
@@ -249,8 +252,15 @@ Two independent toggles, both on by default; turning one off does not affect the
   pasted images as PNG (which inflates file size) by re-compressing PNG uploads to
   WebP server-side: lossless first, falling back to high-quality lossy compression
   only if lossless doesn't help enough, and automatically keeping the original if
-  the result would be larger. **This toggle ships with the plugin, but the
-  conversion code it controls does not** — see "Known limitations" below.
+  the result would be larger. Applies to every image upload path on the site (post
+  body editor, board/page attachments, admin attachments, template layout
+  attachments), not just clipboard-pasted ones — a plain file-picker upload of a
+  PNG gets the same treatment. Fully self-contained: the conversion engine and a
+  small response middleware that keeps the downloaded filename's extension
+  truthful (so "Save image as…" doesn't still suggest `.png` for a file that's
+  actually WebP) both ship inside this plugin, hooking into filter points the
+  host code already exposes rather than patching it — requires PHP's `imagick`
+  extension, which is optional (falls back to a no-op if absent).
 
 A related, general fix shipped alongside this feature (not gated by either toggle):
 while an editor has an upload in flight, submitting the post ("글 작성 완료") is now
@@ -292,15 +302,8 @@ followed by that feature's detailed options:
   succession; a normal single view is fine, and the "view on …" link is always
   present.
 - Playback depends on the browser's codec support (see the codec note above).
-- **The "PNG→WebP" toggle needs a companion server patch this plugin doesn't ship.**
-  The setting itself (storage, admin UI) works standalone on any install, but the
-  code that reads it and actually re-encodes PNGs
-  (`App\Support\ImageResizer::convertPngToWebpInPlace()`) lives outside this
-  plugin's package — in Gnuboard7 core and in `sirsoft-ckeditor5`. Without that
-  patch, toggling this setting is a silent no-op (no error, no effect). See the
-  `Plugin` class docblock in `plugin.php` for exactly what would need to be ported.
-  The **clipboard auto-upload** toggle has no such dependency — it only uses
-  standard CKEditor 5 APIs.
+- **PNG→WebP conversion needs PHP's `imagick` extension.** If it's not loaded, the
+  conversion is silently skipped (PNGs are stored as-is) — no error, no crash.
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
@@ -335,9 +338,13 @@ followed by that feature's detailed options:
     돌아갑니다 — 스크린샷 붙여넣기는 이 설정과 무관하게 계속 동작합니다.
   - **업로드 이미지 PNG→WebP 자동 변환** — 브라우저가 붙여넣은 이미지를 PNG로 재구성해
     용량이 커지는 문제를 완화하기 위해, 서버가 PNG를 WebP로 재압축합니다(무손실 우선 →
-    이득이 적으면 고품질 손실 압축 폴백 → 그래도 원본보다 크면 자동으로 원본 유지). **이
-    설정 자체는 이 플러그인에 포함돼 있지만, 실제로 변환을 수행하는 코드는 포함돼 있지
-    않습니다** — 아래 "Known limitations" 참고.
+    이득이 적으면 고품질 손실 압축 폴백 → 그래도 원본보다 크면 자동으로 원본 유지).
+    클립보드 붙여넣기뿐 아니라 사이트의 모든 이미지 업로드 경로(게시글 본문·게시판/
+    페이지 첨부·관리자 첨부·템플릿 레이아웃 첨부)에 적용되며, 변환 엔진과 다운로드
+    파일명 보정(변환 후에도 "다른 이름으로 저장"이 여전히 `.png`를 제안하지 않도록)
+    미들웨어 전부 이 플러그인 안에 완결돼 있습니다 — g7 코어나 다른 플러그인을 전혀
+    수정하지 않고 훅으로만 연결됩니다. PHP `imagick` 확장이 필요하며(옵셔널, 없으면
+    조용히 변환을 건너뜀), 그 외 별도 서버 패치는 필요 없습니다.
   - 두 체크박스와 무관하게 함께 딸려온 수정: 이미지 업로드가 끝나기 전에 "글 작성 완료"를
     누르면 본문 이미지가 빈칸으로 저장되던 기존 결함을 `PendingActions` 연동으로 막았습니다
     (스크린샷 붙여넣기 경로에도 소급 적용).
