@@ -99,7 +99,7 @@ kept identical and both are committed.
 ## Usage
 
 Open **Admin → Plugins → CKEditor 5 Superpack → Settings**
-(`/admin/plugins/g7-ckeditor5-superpack/settings`). Five tabs, one per feature.
+(`/admin/plugins/g7-ckeditor5-superpack/settings`). Six tabs, one per feature.
 
 ### 1. SNS embeds
 
@@ -228,10 +228,40 @@ height to the comment paragraph directly, so it's off by default and opt-in.
 **Settings:** master on/off · base font size (px) · line height (multiplier) ·
 also-apply-to-comments toggle.
 
+### 6. Image paste
+
+Two independent toggles, both on by default; turning one off does not affect the other:
+
+- **Auto-upload pasted clipboard images** — right-click-copy or drag an image from
+  another site and paste it into the post body editor; if the clipboard actually
+  holds image binary data (not just an HTML reference to it), it's intercepted in
+  the capture phase and uploaded through the existing local upload pipeline
+  (CKEditor 5's standard `uploadImage` command → `sirsoft-ckeditor5`'s upload
+  endpoint). No server-side re-fetching of the source URL is involved, so success
+  doesn't depend on the source site's CORS/hotlink policy the way an earlier
+  rehosting-based approach did (that approach was tried and dropped — see the
+  `Plugin` class docblock in `plugin.php` for the history). Turning this off fully
+  disables the interception (capture listener, the submit-lock guard below, upload)
+  and falls back to `sirsoft-ckeditor5`'s own behavior — pasting a real screenshot
+  still works either way, since that already goes through CKEditor 5's native paste
+  handler independently of this toggle.
+- **Auto-convert uploaded PNG images to WebP** — mitigates browsers re-encoding
+  pasted images as PNG (which inflates file size) by re-compressing PNG uploads to
+  WebP server-side: lossless first, falling back to high-quality lossy compression
+  only if lossless doesn't help enough, and automatically keeping the original if
+  the result would be larger. **This toggle ships with the plugin, but the
+  conversion code it controls does not** — see "Known limitations" below.
+
+A related, general fix shipped alongside this feature (not gated by either toggle):
+while an editor has an upload in flight, submitting the post ("글 작성 완료") is now
+blocked until it finishes, using CKEditor 5's standard `PendingActions` plugin. This
+closes a pre-existing gap that also affected plain screenshot pasting — submitting
+mid-upload used to save the post with an empty `<img>`.
+
 ## Settings screen
 
 **Admin → Plugins → CKEditor 5 Superpack → Settings** shows a short description line
-and five tabs, one per feature. Each tab has a master on/off switch at the top
+and six tabs, one per feature. Each tab has a master on/off switch at the top
 followed by that feature's detailed options:
 
 - **SNS embeds** — per-platform on/off (YouTube · X · Instagram · TikTok) and the
@@ -245,6 +275,8 @@ followed by that feature's detailed options:
   default), lists, links, code and blockquote.
 - **Editor style** — base font size, line height, and the also-apply-to-comments
   toggle.
+- **Image paste** — clipboard auto-upload on/off, PNG→WebP conversion on/off
+  (independent of each other).
 
 ## Known limitations
 
@@ -260,10 +292,19 @@ followed by that feature's detailed options:
   succession; a normal single view is fine, and the "view on …" link is always
   present.
 - Playback depends on the browser's codec support (see the codec note above).
+- **The "PNG→WebP" toggle needs a companion server patch this plugin doesn't ship.**
+  The setting itself (storage, admin UI) works standalone on any install, but the
+  code that reads it and actually re-encodes PNGs
+  (`App\Support\ImageResizer::convertPngToWebpInPlace()`) lives outside this
+  plugin's package — in Gnuboard7 core and in `sirsoft-ckeditor5`. Without that
+  patch, toggling this setting is a silent no-op (no error, no effect). See the
+  `Plugin` class docblock in `plugin.php` for exactly what would need to be ported.
+  The **clipboard auto-upload** toggle has no such dependency — it only uses
+  standard CKEditor 5 APIs.
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
-**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 5개, 기능별로 하나씩.
+**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 6개, 기능별로 하나씩.
 
 - **SNS 임베드** — 본문에 YouTube·X·Instagram·TikTok 링크를 **한 줄에 단독으로** 붙여넣으면
   방문자 화면에서 임베드로 표시됩니다. 임베드 아래에는 항상 원문 링크 버튼이 남습니다.
@@ -284,6 +325,22 @@ followed by that feature's detailed options:
   일괄 적용합니다(기본 OFF). 이미 작성된 글에도 함께 적용됩니다. 댓글은 게시글 본문과 렌더링
   경로가 달라(댓글은 텍스트로 저장되고 `g7-comment-editor` 가 클라이언트에서 서식을 승격) 기본
   적용 대상이 아니며, "댓글에도 동일하게 적용" 옵션으로 opt-in 확장할 수 있습니다.
+- **이미지 복붙** — 서로 독립된 체크박스 2개(둘 다 기본 ON).
+  - **클립보드 이미지 자동 업로드** — 타 사이트에서 이미지를 우클릭 복사/드래그해 본문
+    에디터에 붙여넣으면(클립보드에 실제 이미지 바이너리가 있을 때) 기존 로컬 업로드
+    경로(CKEditor5 표준 `uploadImage` 커맨드)로 그대로 업로드합니다. 외부 URL을 서버가
+    대신 재요청하는 방식이 아니라서 사이트별 CORS/핫링크 정책에 성공 여부가 좌우되지
+    않습니다(과거 재호스팅 방식은 이 문제로 폐기됨 — `plugin.php`의 `Plugin` 클래스
+    docblock 참고). 끄면 가로채기 전체가 비활성화되고 `sirsoft-ckeditor5` 기본 동작으로
+    돌아갑니다 — 스크린샷 붙여넣기는 이 설정과 무관하게 계속 동작합니다.
+  - **업로드 이미지 PNG→WebP 자동 변환** — 브라우저가 붙여넣은 이미지를 PNG로 재구성해
+    용량이 커지는 문제를 완화하기 위해, 서버가 PNG를 WebP로 재압축합니다(무손실 우선 →
+    이득이 적으면 고품질 손실 압축 폴백 → 그래도 원본보다 크면 자동으로 원본 유지). **이
+    설정 자체는 이 플러그인에 포함돼 있지만, 실제로 변환을 수행하는 코드는 포함돼 있지
+    않습니다** — 아래 "Known limitations" 참고.
+  - 두 체크박스와 무관하게 함께 딸려온 수정: 이미지 업로드가 끝나기 전에 "글 작성 완료"를
+    누르면 본문 이미지가 빈칸으로 저장되던 기존 결함을 `PendingActions` 연동으로 막았습니다
+    (스크린샷 붙여넣기 경로에도 소급 적용).
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
 

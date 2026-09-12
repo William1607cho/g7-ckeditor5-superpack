@@ -5,6 +5,41 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-12
+
+### Added
+
+- **Image paste** — a new admin tab with two independent toggles (both on by
+  default):
+  - **Auto-upload pasted clipboard images** (`imagepaste_enabled`) — pasting an
+    image copied or dragged from another site into the post body editor uploads it
+    automatically through the existing local upload pipeline (CKEditor 5's standard
+    `uploadImage` command), as long as the clipboard actually holds image binary
+    data rather than just an HTML reference to it. This replaces an earlier
+    rehosting-based approach (the server re-fetching the external URL) that was
+    tried and dropped for reliability reasons — success no longer depends on the
+    source site's CORS/hotlink policy. Turning this off fully restores
+    `sirsoft-ckeditor5`'s native paste behavior; plain screenshot pasting is
+    unaffected either way, since it already went through that native path.
+  - **Auto-convert uploaded PNG images to WebP** (`imagepaste_webp_enabled`) —
+    mitigates browsers re-encoding pasted images as PNG (which inflates file size)
+    by re-compressing PNG uploads to WebP server-side, lossless first with a
+    high-quality lossy fallback, never producing a larger file than the original.
+    **This toggle ships in the plugin, but the code it controls does not** — see
+    "Known limitations" in the README and the `Plugin` class docblock in
+    `plugin.php`. Without a companion server-side patch (present on the
+    william-cho.com install this plugin was built for, not included in this
+    package), the toggle is a no-op.
+
+### Fixed
+
+- Submitting a post ("글 작성 완료") while a pasted image is still uploading used to
+  save the post with an empty `<img>` (no `src`). The submit button is now locked
+  while any registered editor has an upload in flight, using CKEditor 5's standard
+  `PendingActions` plugin. This is a general fix, not gated by either toggle above —
+  it also retroactively covers plain screenshot pasting, which had the same
+  pre-existing gap.
+
 ## [1.1.0] - 2026-09-11
 
 ### Added

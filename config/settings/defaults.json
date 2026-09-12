@@ -33,7 +33,9 @@
         "editor_style_enabled": false,
         "editor_font_size": 16,
         "editor_line_height": "1.6",
-        "editor_apply_to_comments": false
+        "editor_apply_to_comments": false,
+        "imagepaste_enabled": true,
+        "imagepaste_webp_enabled": true
     },
     "frontend_schema": {
         "sns_enabled": {
@@ -125,6 +127,12 @@
         },
         "editor_apply_to_comments": {
             "expose": true
+        },
+        "imagepaste_enabled": {
+            "expose": true
+        },
+        "imagepaste_webp_enabled": {
+            "expose": false
         }
     }
 }

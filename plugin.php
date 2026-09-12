@@ -9,7 +9,7 @@ use App\Extension\Helpers\ExtensionMenuSyncHelper;
 /**
  * CKEditor 5 슈퍼팩 플러그인 (g7-ckeditor5-superpack)
  *
- * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 렌더 시점 기능 5가지를 더한다.
+ * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 기능 6가지를 더한다.
  *
  *  1. **SNS 링크 자동 임베드** — 본문에 단독으로 붙여넣은 YouTube·X(Twitter)·Instagram·TikTok
  *     링크를 방문자 화면에서 각 플랫폼 임베드로 치환한다.
@@ -25,22 +25,47 @@ use App\Extension\Helpers\ExtensionMenuSyncHelper;
  *     `.ck-content`/`prose` 경로를 타지 않고 `g7-comment-editor`가 클라이언트에서 승격시킨
  *     `p.text-gray-700.dark:text-gray-300` 요소이므로 기본적으로 구조적으로 분리되고,
  *     "댓글에도 적용" 옵션으로 선택적으로 확장할 수 있다.
+ *  6. **이미지 복붙** — 타 사이트에서 이미지를 우클릭 복사/드래그해 게시글 본문 에디터에
+ *     붙여넣으면(클립보드에 실제 이미지 바이너리가 있는 경우) 자동으로 서버에 업로드하고
+ *     본문에 삽입한다. 재호스팅(외부 URL 재요청) 방식이 아니라 클립보드가 이미 들고 있는
+ *     바이너리를 CKEditor5 표준 `uploadImage` 커맨드로 그대로 넘기는 방식이라 사이트별
+ *     성공률 편차가 없다(과거 버전의 URL 재호스팅 방식은 안정성 문제로 폐기됨, 아래
+ *     "주의" 참고). 부가로 PNG→WebP 자동 변환 옵션을 함께 제공한다 — 자세한 내용과
+ *     **중요한 제약**은 아래 참고.
  *
  * 아키텍처: 프론트 렌더 로직은 `loading.strategy = global` 로 전 페이지에 로드되는
  * `dist/js/plugin.iife.js` 가 `.ck-content` 를 자체 스캔(+MutationObserver)해 수행한다.
- * 편집 화면의 동영상 업로드 버튼·미디어 라이브러리·에디터 스타일 마커는
- * `element.ckeditorInstance` 로 얹는다. CKEditor 본체(`sirsoft-ckeditor5`)는
- * 손대지 않는다 — 저장 데이터는 순수 `<a href>` 링크·원문 텍스트이며, 이 플러그인이
- * 방문자 화면에서만 임베드/카드/플레이어/서식으로 승격한다.
+ * 편집 화면의 동영상 업로드 버튼·미디어 라이브러리·에디터 스타일 마커·이미지 복붙
+ * 캡처 리스너는 `element.ckeditorInstance` 로 얹는다. CKEditor 본체(`sirsoft-ckeditor5`)는
+ * 손대지 않는다 — 저장 데이터는 순수 `<a href>` 링크·원문 텍스트(이미지 복붙만 예외 —
+ * `<img>` 자체를 표준 업로드 파이프라인으로 저장)이며, 이 플러그인이 방문자 화면에서만
+ * 임베드/카드/플레이어/서식으로 승격한다.
  *
- * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 5개
+ * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 6개
  * (SNS 임베드 / 외부 링크 카드화 / 로컬 동영상 업로드 / 마크다운 자동 변환 /
- * 에디터 스타일)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
+ * 에디터 스타일 / 이미지 복붙)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
  *
- * 참고: "이미지 복붙허용"(외부 이미지 URL 자동 재호스팅) 기능은 2026-09-11에 구현·
- * 배포됐으나, 사이트별로 결과가 제각각임이 확인되어(정상 사이트는 성공, CORS 차단·
- * 조용한 실패·원천 차단 등 사이트마다 다른 실패 양상) 안정성 미확보로 같은 날 롤백됐다.
- * 재설계 전까지는 존재하지 않는다.
+ * **중요 — "PNG→WebP 자동 변환"(`imagepaste_webp_enabled`) 설정의 이식성 제약**:
+ * 이 설정 자체(저장·조회·관리자 UI)는 이 플러그인 안에 완전히 포함돼 있어 어느 g7
+ * 사이트에 설치해도 정상 동작한다. 그러나 이 설정을 실제로 "소비"해 PNG를 WebP로
+ * 재인코딩하는 코드(`App\Support\ImageResizer::convertPngToWebpInPlace()`)는 이
+ * 플러그인 패키지에 포함돼 있지 않다 — g7 코어(`app/Services/AttachmentService.php` 등)
+ * 와 `sirsoft-ckeditor5` 플러그인 쪽에 추가해야 하는 **별도의 서버 패치**로 구현돼
+ * 있으며, 이 패치는 현재 atozai(william-cho.com) 사이트에만 반영돼 있다. 즉 이 플러그인을
+ * 그대로 다른 g7 사이트에 설치하면 "PNG→WebP 자동 변환" 체크박스는 화면에 나타나고
+ * 저장도 되지만, 그 값을 읽어 실제로 동작을 바꾸는 코드가 없어 **아무 효과도 없다**
+ * (에러도 나지 않고 조용히 무동작 — 설정 자체가 UI 이상의 의미를 갖지 않는 상태).
+ * 이 제약을 다른 설치 환경에 이식하려면 core `ImageResizer`에 동일한 메서드를 추가하고
+ * 업로드 파이프라인 각 지점에서 호출하도록 별도 작업이 필요하다(이번 릴리스 범위 밖).
+ * "클립보드 이미지 자동 업로드" 설정(`imagepaste_enabled`)은 이런 제약이 없다 —
+ * CKEditor5 표준 API만 쓰므로 `sirsoft-ckeditor5` 의존성만 충족하면 어디서든 동작한다.
+ *
+ * 참고(과거 이력): "이미지 복붙허용"이라는 이름으로 외부 이미지 URL을 서버가 대신
+ * 재요청해 재호스팅하는 방식이 2026-09-11에 먼저 시도됐으나, 사이트별로 결과가
+ * 제각각임이 확인되어(정상 사이트는 성공, CORS 차단·조용한 실패·원천 차단 등 사이트마다
+ * 다른 실패 양상) 안정성 미확보로 같은 날 롤백됐다. 위 6번 "이미지 복붙" 기능은 그
+ * 재설계 결과물로, 재호스팅이 아니라 클립보드가 이미 보유한 바이너리만 사용하는 전혀
+ * 다른(더 단순하고 안정적인) 방식이다.
  */
 class Plugin extends AbstractPlugin
 {
@@ -61,12 +86,14 @@ class Plugin extends AbstractPlugin
     /**
      * 플러그인 설정 스키마 반환
      *
-     * 다섯 탭으로 나뉜다:
-     *  - `sns_*`      : SNS 링크 임베드 (마스터 토글 + 플랫폼별 토글 + Shorts 비율)
-     *  - `linkcard_*` : 외부 링크 카드화 (마스터 토글 + 최소 카드 토글 + 이미지 크기 + 캐시 TTL 2종)
-     *  - `video_*`    : 로컬 동영상 업로드 (마스터 토글 + 최대 크기 + 청크 크기 + 확장자 토글 + 보관기간)
-     *  - `md_*`       : 마크다운 자동 변환 (마스터 토글 + 요소별 토글 7종)
-     *  - `editor_*`   : 에디터 스타일 (마스터 토글 + 글자크기 + 줄간격 + 댓글에도 적용)
+     * 여섯 탭으로 나뉜다:
+     *  - `sns_*`        : SNS 링크 임베드 (마스터 토글 + 플랫폼별 토글 + Shorts 비율)
+     *  - `linkcard_*`   : 외부 링크 카드화 (마스터 토글 + 최소 카드 토글 + 이미지 크기 + 캐시 TTL 2종)
+     *  - `video_*`      : 로컬 동영상 업로드 (마스터 토글 + 최대 크기 + 청크 크기 + 확장자 토글 + 보관기간)
+     *  - `md_*`         : 마크다운 자동 변환 (마스터 토글 + 요소별 토글 7종)
+     *  - `editor_*`     : 에디터 스타일 (마스터 토글 + 글자크기 + 줄간격 + 댓글에도 적용)
+     *  - `imagepaste_*` : 이미지 복붙 (클립보드 자동 업로드 토글 + PNG→WebP 변환 토글,
+     *                     둘은 서로 독립 — 후자는 이식성 제약 있음, 클래스 상단 docblock 참고)
      *
      * @return array 설정 스키마
      */
@@ -319,6 +346,18 @@ class Plugin extends AbstractPlugin
                 ['ko' => '댓글에도 동일하게 적용', 'en' => 'Also Apply to Comments'],
                 ['ko' => '켜면 댓글 영역에도 같은 글자크기·줄간격이 적용됩니다. sirsoft-basic 댓글 스타일과 다르게 보일 수 있습니다.', 'en' => 'When on, the same font size and line height are also applied to comments. This may look different from the default sirsoft-basic comment style.'],
             ),
+
+            // ---- 탭 6: 이미지 복붙 ----
+            'imagepaste_enabled' => $this->booleanSetting(
+                true,
+                ['ko' => '클립보드 이미지 자동 업로드', 'en' => 'Auto-upload Pasted Clipboard Images'],
+                ['ko' => '타 사이트에서 이미지를 우클릭으로 복사하거나 드래그해서 게시글 본문 에디터에 붙여넣으면 자동으로 서버에 업로드되고 렌더링됩니다. 끄면 이 플러그인이 추가한 클립보드 붙여넣기 가로채기가 모두 비활성화되고 sirsoft-ckeditor5 기본 동작으로 돌아갑니다 — 스크린샷 붙여넣기는 이 설정과 무관하게 계속 동작하지만, 업로드 중 제출 방지 안전장치는 이 설정을 끄면 함께 빠집니다.', 'en' => "Right-click-copying or dragging an image from another site and pasting it into the post body editor uploads it to the server automatically. When off, this plugin's paste interception is fully disabled and sirsoft-ckeditor5's default behavior takes over — pasting a real screenshot still works regardless of this setting, but the safeguard against submitting while an upload is in progress is disabled along with it."],
+            ),
+            'imagepaste_webp_enabled' => $this->booleanSetting(
+                true,
+                ['ko' => '업로드 이미지 PNG→WebP 자동 변환', 'en' => 'Auto-convert Uploaded PNG Images to WebP'],
+                ['ko' => '클립보드 붙여넣기 시 브라우저가 이미지를 PNG로 재구성해 용량이 커지는 문제를 줄이기 위해, 서버에 저장할 때 PNG를 WebP로 다시 압축합니다(무손실 우선, 필요 시 고품질 손실 압축, 원본보다 커지면 자동으로 원본을 그대로 둡니다). 위 클립보드 붙여넣기 설정을 꺼도 이 설정은 별개로 동작합니다.', 'en' => "To offset browsers re-encoding pasted images as PNG (which inflates file size), PNG uploads are re-compressed to WebP on the server (lossless first, falling back to high-quality lossy compression if needed, automatically keeping the original if the result would be larger). This works independently of the clipboard-paste setting above."],
+            ),
         ];
     }
 
@@ -360,6 +399,8 @@ class Plugin extends AbstractPlugin
             'editor_font_size' => 16,
             'editor_line_height' => '1.6',
             'editor_apply_to_comments' => false,
+            'imagepaste_enabled' => true,
+            'imagepaste_webp_enabled' => true,
         ];
     }
 

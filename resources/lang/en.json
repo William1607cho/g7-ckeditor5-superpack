@@ -38,7 +38,8 @@
             "linkcard": "External link cards",
             "video": "Local video upload",
             "md": "Markdown auto-convert",
-            "editorstyle": "Editor style"
+            "editorstyle": "Editor style",
+            "imagepaste": "Image paste"
         },
         "sns": {
             "intro": "When a YouTube, X (Twitter), Instagram or TikTok link is pasted on its own line, it is shown as a playable embed on the visitor-facing page.",
@@ -159,6 +160,14 @@
             "editor_apply_to_comments": {
                 "label": "Also apply to comments",
                 "hint": "When on, the same font size and line height are also applied to comments. This may look different from the default sirsoft-basic comment style."
+            },
+            "imagepaste_enabled": {
+                "label": "Auto-upload pasted clipboard images",
+                "hint": "Right-click-copying or dragging an image from another site and pasting it into the post body editor uploads it to the server automatically and renders it. When off, this plugin's paste interception (auto-upload of external images, locking the 'submit' button while an upload is in progress, etc.) is fully disabled and sirsoft-ckeditor5's default behavior takes over — pasting a real screenshot (where the clipboard holds an actual image file) still works regardless of this setting, but the safeguard against submitting while an upload is still in progress is disabled along with it."
+            },
+            "imagepaste_webp_enabled": {
+                "label": "Auto-convert uploaded PNG images to WebP",
+                "hint": "To offset browsers re-encoding pasted images as PNG (which inflates file size), PNG uploads are re-compressed to WebP on the server (lossless first, falling back to high-quality lossy compression if needed, automatically keeping the original if the result would be larger). This works independently of the clipboard-paste setting above — it also applies to PNGs uploaded via the regular file picker."
             }
         },
         "md": {
@@ -168,6 +177,9 @@
         },
         "editorstyle": {
             "intro": "Applies a site-wide base font size and line height to the post body editor. This also applies to already-published posts. By default it does not affect comments; turn on 'Also apply to comments' below to extend it to comments too."
+        },
+        "imagepaste": {
+            "intro": "Controls what happens when an image is pasted into the post body editor. The two settings below are independent and can be toggled separately."
         }
     }
 }
