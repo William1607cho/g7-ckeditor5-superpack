@@ -30,6 +30,8 @@
         "md_link": true,
         "md_code": true,
         "md_quote": true,
+        "md_table": true,
+        "md_hr": true,
         "editor_style_enabled": false,
         "editor_font_size": 16,
         "editor_line_height": "1.6",
@@ -114,6 +116,12 @@
             "expose": true
         },
         "md_quote": {
+            "expose": true
+        },
+        "md_table": {
+            "expose": true
+        },
+        "md_hr": {
             "expose": true
         },
         "editor_style_enabled": {

@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-15
+
+### Added
+
+- **Markdown tables** (`md_table`, on by default) — a GFM table (a header row
+  immediately followed by a delimiter row such as `|---|:---:|` with the same column
+  count) is rendered as `<figure class="table"><table>` on the visitor-facing page.
+  The first row becomes `<th>` header cells; bold, links and inline code inside cells
+  are converted too; `\|` is a literal pipe inside a cell. Column alignment marks
+  (`:---`, `---:`) are ignored. Tables pasted as `<br>`-joined lines are split per
+  line first, like the other block elements. Many-column tables get horizontal
+  overflow instead of breaking the layout.
+- **Horizontal rules** (`md_hr`, on by default) — a whole line of `---`, `***` or
+  `___` (3+) is rendered as `<hr>`, regardless of the `sirsoft-ckeditor5` toolbar
+  setting (the conversion is render-time, so the editor's HorizontalLine plugin is
+  not involved). When the toggle is off, the line is hidden instead.
+- Both elements get a checkbox in the *Markdown auto-convert* settings tab. Existing
+  installs pick up the defaults without re-saving settings.
+
+### Notes
+
+- As before, nothing is stored differently: the post body keeps the literal
+  markdown text, and re-opening the post in the editor shows it unchanged.
+- Output for the existing elements (headings, bold, italic, lists, links, code,
+  blockquotes) is unchanged; this was verified by rendering the same corpus with
+  1.2.1 and 1.3.0 in Chromium and comparing the resulting DOM.
+
+### Known issues
+
+- **Single list lines separated by a converted block are merged (not fixed).** When
+  a lone `- item` line, a converted heading / blockquote / fenced code block, and
+  another lone `- item` line follow each other (e.g. `- a`, `# Heading`, `- b`),
+  the page's repeated scans skip the already-converted block when looking for
+  consecutive lines, so the two list lines end up as one `<ul>` placed *before* the
+  heading. The result is the same on every load, but the order is wrong. This
+  predates 1.3.0; the new tables and horizontal rules act as boundaries and are not
+  affected.
+
 ## [1.2.1] - 2026-09-12
 
 ### Changed

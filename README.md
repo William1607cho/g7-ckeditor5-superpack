@@ -37,7 +37,7 @@ admin and front page. On the visitor-facing page it scans each `.ck-content` blo
 (plus a `MutationObserver` for SPA navigation) and rewrites the DOM:
 
 - markdown marks → real elements (`<h1>`–`<h3>`, `<strong>`, `<ul>`/`<ol>`,
-  `<blockquote>`, `<code>`/`<pre>`, `<a>`);
+  `<blockquote>`, `<code>`/`<pre>`, `<a>`, `<table>`, `<hr>`);
 - own-server video links → `<video controls>`;
 - bare SNS links → platform embeds;
 - other bare external links → link-preview cards (metadata fetched by a server
@@ -201,6 +201,8 @@ stored body is unchanged, and conversion never runs inside the editor.
 | Links | `[text](http…)` | on |
 | Code | `` `inline` `` and fenced ```` ``` ```` blocks | on |
 | Blockquote | line-start `> ` | on |
+| Tables | GFM table: header row + `\|---\|---\|` delimiter row with the same column count | on |
+| Horizontal rule | a whole line of `---` / `***` / `___` | on (when off, the line is hidden) |
 
 **False-positive guards:** a block converts only if the whole paragraph's text
 matches `mark + space + content` exactly and it has no child elements; a paragraph
@@ -212,7 +214,13 @@ quotes / headings still convert. Conversion is idempotent (marker attributes on
 converted nodes) and runs the markdown pass **first**, so a `[text](url)` is already
 a real `<a>` before the SNS / card passes see it.
 
-**Settings:** master on/off · a per-element on/off for each of the seven above (e.g.
+**Tables:** the first row becomes header cells; bold / links / inline code inside cells
+are converted; `\|` is a literal pipe; alignment marks (`:---`, `---:`) are ignored;
+wide tables scroll horizontally. **Horizontal rules** are always rendered as `<hr>`,
+independent of the `sirsoft-ckeditor5` toolbar type (render-time conversion doesn't
+need the editor's HorizontalLine plugin).
+
+**Settings:** master on/off · a per-element on/off for each of the nine above (e.g.
 headings on, lists off).
 
 ### 5. Editor style
@@ -282,7 +290,7 @@ followed by that feature's detailed options:
   extension toggles, and the auto-delete retention period, with a codec-compatibility
   note.
 - **Markdown auto-convert** — a per-element on/off for headings, bold, italic (off by
-  default), lists, links, code and blockquote.
+  default), lists, links, code, blockquote, tables and horizontal rules.
 - **Editor style** — base font size, line height, and the also-apply-to-comments
   toggle.
 - **Image paste** — clipboard auto-upload on/off, PNG→WebP conversion on/off
@@ -302,6 +310,10 @@ followed by that feature's detailed options:
   succession; a normal single view is fine, and the "view on …" link is always
   present.
 - Playback depends on the browser's codec support (see the codec note above).
+- **Markdown: lone list lines around a converted block are merged.** `- a` /
+  `# Heading` / `- b` renders as one list (`a`, `b`) followed by the heading; the
+  same happens with a blockquote or fenced code block in between. See the 1.3.0
+  entry in the changelog.
 - **PNG→WebP conversion needs PHP's `imagick` extension.** If it's not loaded, the
   conversion is silently skipped (PNGs are stored as-is) — no error, no crash.
 
@@ -322,7 +334,8 @@ followed by that feature's detailed options:
   는 일부 브라우저에서 재생되지 않습니다(트랜스코딩 없음). 자동 삭제 보관기간은 기본 0(무기한).
 - **마크다운 자동 변환** — 붙여넣은 `##`, `**굵게**` 같은 기호를 방문자 화면에서 실제 서식으로
   바꿉니다. 본문 원문은 그대로 저장됩니다. 지원: 제목 / 굵게 / 기울임(기본 OFF) / 목록(2줄 이상
-  연속) / 링크 / 코드 / 인용구, 요소별 온/오프. `#태그`(공백 없음)·`####`·단일 `- 문장`·`2024.`
+  연속) / 링크 / 코드 / 인용구 / 표(GFM, 첫 행은 헤더) / 구분선(`---`, 항상 `<hr>`, 끄면 줄 숨김),
+  요소별 온/오프. `#태그`(공백 없음)·`####`·단일 `- 문장`·`2024.`
   같은 것은 변환하지 않습니다.
 - **에디터 스타일** — 게시글 본문의 기본 글자크기(12~28px)·줄간격(1.2~2.0)을 사이트 전체에
   일괄 적용합니다(기본 OFF). 이미 작성된 글에도 함께 적용됩니다. 댓글은 게시글 본문과 렌더링

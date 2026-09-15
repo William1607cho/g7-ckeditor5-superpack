@@ -91,7 +91,7 @@ class Plugin extends AbstractPlugin
      *  - `sns_*`        : SNS 링크 임베드 (마스터 토글 + 플랫폼별 토글 + Shorts 비율)
      *  - `linkcard_*`   : 외부 링크 카드화 (마스터 토글 + 최소 카드 토글 + 이미지 크기 + 캐시 TTL 2종)
      *  - `video_*`      : 로컬 동영상 업로드 (마스터 토글 + 최대 크기 + 청크 크기 + 확장자 토글 + 보관기간)
-     *  - `md_*`         : 마크다운 자동 변환 (마스터 토글 + 요소별 토글 7종)
+     *  - `md_*`         : 마크다운 자동 변환 (마스터 토글 + 요소별 토글 9종)
      *  - `editor_*`     : 에디터 스타일 (마스터 토글 + 글자크기 + 줄간격 + 댓글에도 적용)
      *  - `imagepaste_*` : 이미지 복붙 (클립보드 자동 업로드 토글 + PNG→WebP 변환 토글,
      *                     둘은 서로 독립 — 둘 다 이 플러그인 안에서 완결됨, 클래스 상단 docblock 참고)
@@ -307,6 +307,16 @@ class Plugin extends AbstractPlugin
                 ['ko' => '인용구 (`> 인용`)', 'en' => 'Blockquote (`> quote`)'],
                 ['ko' => '`> ` 로 시작하는 줄을 인용구로 변환합니다. 연속 줄은 한 인용구로 묶입니다.', 'en' => 'Converts lines starting with `> ` to a blockquote; consecutive lines are merged into one.'],
             ),
+            'md_table' => $this->booleanSetting(
+                true,
+                ['ko' => '표 (`| 제목 | 제목 |` + `|---|---|`)', 'en' => 'Tables (`| head | head |` + `|---|---|`)'],
+                ['ko' => '헤더 행 바로 다음 줄이 열 수가 같은 구분 행(`|---|`)일 때만 표로 변환합니다. 첫 행은 헤더 셀, 셀 안의 굵게·링크·코드도 변환합니다. 열 정렬 표기(`:---`, `---:`)는 무시합니다.', 'en' => 'Converts to a table only when the header row is immediately followed by a delimiter row (`|---|`) with the same column count. The first row becomes header cells; bold/links/code inside cells are converted too. Column alignment marks (`:---`, `---:`) are ignored.'],
+            ),
+            'md_hr' => $this->booleanSetting(
+                true,
+                ['ko' => '구분선 (`---`)', 'en' => 'Horizontal rule (`---`)'],
+                ['ko' => '줄 전체가 `---`/`***`/`___`(3개 이상)인 줄을 구분선으로 표시합니다(에디터 툴바 설정과 무관). 끄면 해당 줄을 숨깁니다.', 'en' => 'Shows a whole-line `---`/`***`/`___` (3+) as a horizontal rule (regardless of the editor toolbar). When off, the line is hidden.'],
+            ),
             // ---- 탭 5: 에디터 스타일 ----
             'editor_style_enabled' => $this->booleanSetting(
                 false,
@@ -396,6 +406,8 @@ class Plugin extends AbstractPlugin
             'md_link' => true,
             'md_code' => true,
             'md_quote' => true,
+            'md_table' => true,
+            'md_hr' => true,
             'editor_style_enabled' => false,
             'editor_font_size' => 16,
             'editor_line_height' => '1.6',

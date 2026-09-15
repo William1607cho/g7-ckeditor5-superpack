@@ -81,6 +81,8 @@
       mdLink: asBool(s.md_link, true),
       mdCode: asBool(s.md_code, true),
       mdQuote: asBool(s.md_quote, true),
+      mdTable: asBool(s.md_table, true),
+      mdHr: asBool(s.md_hr, true),
       editorStyleEnabled: asBool(s.editor_style_enabled, false),
       editorFontSize: asInt(s.editor_font_size, 16, 12, 28),
       editorLineHeight: asLineHeight(s.editor_line_height, '1.6'),
@@ -1491,7 +1493,16 @@
       + '.ck-content [data-ck5-md-inline] strong, .ck-content [data-ck5-md] strong{font-weight:700;}'
       + '.ck-content [data-ck5-md-inline] em, .ck-content [data-ck5-md] em{font-style:italic;}'
       + '.ck-content a[data-ck5-mda]{color:#2563eb;text-decoration:underline;}'
-      + 'html.dark .ck-content a[data-ck5-mda]{color:#60a5fa;}';
+      + 'html.dark .ck-content a[data-ck5-mda]{color:#60a5fa;}'
+      /* 표·구분선: CKEditor 5 content styles(표/HorizontalLine) 값에 맞춤. 열이 많은 표는 가로 스크롤. */
+      + '.ck-content figure.table[data-ck5-md]{display:block;overflow-x:auto;margin:.9em 0;}'
+      + '.ck-content figure.table[data-ck5-md]>table{border-collapse:collapse;border-spacing:0;width:100%;border:1px double #b3b3b3;}'
+      + '.ck-content figure.table[data-ck5-md] th, .ck-content figure.table[data-ck5-md] td{min-width:2em;padding:.4em;border:1px solid #bfbfbf;text-align:left;vertical-align:top;}'
+      + '.ck-content figure.table[data-ck5-md] th{font-weight:700;background:rgba(0,0,0,.05);}'
+      + 'html.dark .ck-content figure.table[data-ck5-md]>table, html.dark .ck-content figure.table[data-ck5-md] th, html.dark .ck-content figure.table[data-ck5-md] td{border-color:#475569;}'
+      + 'html.dark .ck-content figure.table[data-ck5-md] th{background:rgba(255,255,255,.06);}'
+      + '.ck-content hr[data-ck5-md]{margin:15px 0;height:4px;background:#dedede;border:0;}'
+      + 'html.dark .ck-content hr[data-ck5-md]{background:#475569;}';
     document.head.appendChild(el);
   }
 
@@ -1545,6 +1556,35 @@
     el.dataset.ck5MdInline = '1';
   }
 
+  /** 구분선 줄: 같은 기호 3개 이상만(`---`, `***`, `___`), 공백·다른 문자 섞이면 아님. */
+  var MD_HR_RE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+  /** GFM 표 구분 행: `|---|:---:|` 형태, 파이프 필수(파이프 없는 `---` 는 구분선). 정렬 표기는 무시. */
+  var MD_TABLE_DELIM_RE = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
+
+  /** 표 한 행 → 셀 문자열 배열 (양끝 파이프 제거, `\|` 는 셀 안의 문자 `|`). */
+  function mdTableCells(line) {
+    var s = line.trim();
+    if (s.charAt(0) === '|') s = s.slice(1);
+    if (s.slice(-1) === '|' && s.slice(-2) !== '\\|') s = s.slice(0, -1);
+    var cells = [], buf = '';
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === '\\' && s.charAt(i + 1) === '|') { buf += '|'; i++; }
+      else if (ch === '|') { cells.push(buf.trim()); buf = ''; }
+      else buf += ch;
+    }
+    cells.push(buf.trim());
+    return cells;
+  }
+
+  /** header 줄 + 다음 줄이 GFM 표 시작(헤더·구분 행 열 수 일치)이면 열 수, 아니면 0. */
+  function mdTableCols(header, delim) {
+    if (!header || !delim || header.indexOf('|') < 0 || delim.indexOf('|') < 0) return 0;
+    if (!MD_TABLE_DELIM_RE.test(delim)) return 0;
+    var n = mdTableCells(header).length;
+    return n === mdTableCells(delim).length ? n : 0;
+  }
+
   /**
    * `.ck-content` 안의 마크다운 문법을 실제 서식으로 바꾼다 (방문자 화면 전용 — 편집기
    * editable 에서는 실행 안 함). 다른 승격 패스보다 먼저 돌아 링크가 `<a>` 가 된 뒤
@@ -1588,6 +1628,12 @@
         }
         segs.push(buf);
         var anyMd = segs.some(function (s) { return BLOCK_MD_RE.test((s || '').replace(/ /g, ' ').trim()); });
+        if (!anyMd) {
+          var tl = segs.map(function (s) { return (s || '').replace(/ /g, ' ').trim(); });
+          anyMd = tl.some(function (s, ti) {
+            return MD_HR_RE.test(s) || (cfg.mdTable && mdTableCols(s, tl[ti + 1]) > 0);
+          });
+        }
         if (!anyMd) return;
         var frag = document.createDocumentFragment();
         segs.forEach(function (s) {
@@ -1602,6 +1648,9 @@
       var kids = [];
       for (var i = 0; i < scope.children.length; i++) {
         var k = scope.children[i];
+        // 표·구분선(제거 자리 포함)은 재스캔 때도 kids 에 "경계"로 남긴다 — 빠지면 그 앞뒤
+        // 줄이 연속으로 보여 목록·인용 병합이 첫 스캔과 달라진다(결정성).
+        if (k.dataset && k.dataset.ck5MdBreak) { kids.push(k); continue; }
         if (k.dataset && k.dataset.ck5Md) continue;
         if (/^(P|DIV)$/.test(k.tagName) && !k.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) kids.push(k);
       }
@@ -1684,6 +1733,59 @@
             for (var d4 = end; d4 >= p + 1; d4--) kids[d4].remove();
             p = end + 1; continue;
           }
+        }
+        // 표·구분선은 기존 요소 판정이 모두 빗나간 줄에만 적용(기존 변환 결과 불변).
+        if (cfg.mdTable && p + 1 < kids.length && pure(kids[p + 1])) {
+          var cols = mdTableCols(line, lineOf(kids[p + 1]));
+          if (cols > 0) {
+            var rowEnd = p + 2;
+            while (rowEnd < kids.length) {
+              var rl = lineOf(kids[rowEnd]);
+              if (rl && rl.indexOf('|') >= 0 && pure(kids[rowEnd])) rowEnd++; else break;
+            }
+            var fig = document.createElement('figure');
+            fig.className = 'table';
+            fig.dataset.ck5Md = '1'; fig.dataset.ck5MdBreak = '1';
+            var tbl = document.createElement('table');
+            var addRow = function (parent, text, cellTag) {
+              var tr = document.createElement('tr');
+              var cells = mdTableCells(text);
+              for (var ci = 0; ci < cols; ci++) {
+                var cell = document.createElement(cellTag);
+                cell.innerHTML = mdInline(ci < cells.length ? cells[ci] : '', cfg);
+                cell.dataset.ck5MdInline = '1';
+                tr.appendChild(cell);
+              }
+              parent.appendChild(tr);
+            };
+            var thead = document.createElement('thead');
+            addRow(thead, line, 'th');
+            tbl.appendChild(thead);
+            if (rowEnd > p + 2) {
+              var tbody = document.createElement('tbody');
+              for (var r = p + 2; r < rowEnd; r++) addRow(tbody, lineOf(kids[r]), 'td');
+              tbl.appendChild(tbody);
+            }
+            fig.appendChild(tbl);
+            kids[p].replaceWith(fig);
+            for (var d5 = rowEnd - 1; d5 >= p + 1; d5--) kids[d5].remove();
+            kids.splice(p, rowEnd - p, fig);
+            p++; continue;
+          }
+        }
+        if (MD_HR_RE.test(line)) {
+          var hrEl;
+          if (cfg.mdHr) {
+            // 방문자 화면 전용 렌더라 에디터의 HorizontalLine 로드 여부와 무관하게 <hr>.
+            hrEl = document.createElement('hr');
+          } else {
+            // 구분선 토글 꺼짐 → 줄 숨김. 빈 숨김 자리표시만 남겨 경계 역할 유지.
+            hrEl = document.createElement('div');
+            hrEl.hidden = true;
+            hrEl.setAttribute('aria-hidden', 'true');
+          }
+          hrEl.dataset.ck5Md = '1'; hrEl.dataset.ck5MdBreak = '1';
+          el.replaceWith(hrEl); kids[p] = hrEl; p++; continue;
         }
         p++;
       }

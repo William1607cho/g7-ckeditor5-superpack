@@ -502,6 +502,14 @@
                                         { "type": "basic", "name": "Input", "props": { "id": "md_quote", "type": "checkbox", "name": "md_quote", "className": "h-4 w-4 rounded text-blue-600" } },
                                         { "type": "basic", "name": "Label", "props": { "htmlFor": "md_quote", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_quote.label" }
                                     ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_table", "type": "checkbox", "name": "md_table", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_table", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_table.label" }
+                                    ] },
+                                    { "type": "basic", "name": "Div", "props": { "className": "flex items-center gap-3" }, "children": [
+                                        { "type": "basic", "name": "Input", "props": { "id": "md_hr", "type": "checkbox", "name": "md_hr", "className": "h-4 w-4 rounded text-blue-600" } },
+                                        { "type": "basic", "name": "Label", "props": { "htmlFor": "md_hr", "className": "text-sm text-gray-700 dark:text-gray-300" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.md_hr.label" }
+                                    ] },
                                     { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.md.falsepos_note" }
                                 ]
                             }
@@ -711,6 +719,8 @@
         "md_link": { "type": "boolean", "default": true },
         "md_code": { "type": "boolean", "default": true },
         "md_quote": { "type": "boolean", "default": true },
+        "md_table": { "type": "boolean", "default": true },
+        "md_hr": { "type": "boolean", "default": true },
         "editor_style_enabled": { "type": "boolean", "default": false },
         "editor_font_size": { "type": "integer", "default": 16 },
         "editor_line_height": { "type": "enum", "options": ["1.2", "1.4", "1.6", "1.8", "2.0"], "default": "1.6" },

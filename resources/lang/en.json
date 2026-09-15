@@ -145,6 +145,12 @@
             "md_quote": {
                 "label": "Blockquote — line-start `> ` → quote block"
             },
+            "md_table": {
+                "label": "Tables — `| head | head |` followed by `|---|---|` → table (first row = header; bold/links in cells converted)"
+            },
+            "md_hr": {
+                "label": "Horizontal rule — whole-line `---` → rule (when off, the line is hidden)"
+            },
             "editor_style_enabled": {
                 "label": "Enable editor style",
                 "hint": "Changes the post body's base font size and line height to the values below. When off, the sirsoft-ckeditor5 default is shown."
