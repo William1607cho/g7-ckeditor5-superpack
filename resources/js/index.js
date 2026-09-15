@@ -1628,10 +1628,10 @@
         }
         segs.push(buf);
         var anyMd = segs.some(function (s) { return BLOCK_MD_RE.test((s || '').replace(/ /g, ' ').trim()); });
-        if (!anyMd) {
+        if (!anyMd && (cfg.mdTable || cfg.mdHr)) {
           var tl = segs.map(function (s) { return (s || '').replace(/ /g, ' ').trim(); });
           anyMd = tl.some(function (s, ti) {
-            return MD_HR_RE.test(s) || (cfg.mdTable && mdTableCols(s, tl[ti + 1]) > 0);
+            return (cfg.mdHr && MD_HR_RE.test(s)) || (cfg.mdTable && mdTableCols(s, tl[ti + 1]) > 0);
           });
         }
         if (!anyMd) return;
@@ -1648,17 +1648,17 @@
       var kids = [];
       for (var i = 0; i < scope.children.length; i++) {
         var k = scope.children[i];
-        // 표·구분선(제거 자리 포함)은 재스캔 때도 kids 에 "경계"로 남긴다 — 빠지면 그 앞뒤
-        // 줄이 연속으로 보여 목록·인용 병합이 첫 스캔과 달라진다(결정성).
-        if (k.dataset && k.dataset.ck5MdBreak) { kids.push(k); continue; }
-        if (k.dataset && k.dataset.ck5Md) continue;
+        // 이미 변환된 블록(제목·목록·인용·코드·표·구분선)은 재스캔 때도 kids 에 "경계"로 남긴다.
+        // 빠지면 그 앞뒤 줄이 연속으로 보여, 페이지의 반복 스캔에서 `- a` / `# 제목` / `- b` 가
+        // 한 목록으로 합쳐지고 제목 뒤로 밀린다. 경계는 pure() 가 false 라 어떤 변환 대상도 아니다.
+        if (k.dataset && k.dataset.ck5Md) { kids.push(k); continue; }
         if (/^(P|DIV)$/.test(k.tagName) && !k.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) kids.push(k);
       }
       var lineOf = function (el) {
         if (el.querySelector('br')) return null; // residual <br> <p> (not a split target) -> hold off block convert
         return (el.textContent || '').replace(/ /g, ' ').trim();
       };
-      var pure = function (el) { return !el.querySelector('*'); };
+      var pure = function (el) { return !(el.dataset && el.dataset.ck5Md) && !el.querySelector('*'); };
       var mergeList = function (kids, start, re, strip, tag) {
         var run = [start], j = start + 1;
         while (j < kids.length) {
@@ -1719,7 +1719,7 @@
           var end = -1;
           for (var f = p + 1; f < kids.length; f++) {
             var fl = lineOf(kids[f]);
-            if (fl !== null && /^```\s*$/.test(fl)) { end = f; break; }
+            if (fl !== null && /^```\s*$/.test(fl) && !kids[f].dataset.ck5Md) { end = f; break; }
           }
           if (end > p) {
             var pre = document.createElement('pre');
@@ -1745,7 +1745,7 @@
             }
             var fig = document.createElement('figure');
             fig.className = 'table';
-            fig.dataset.ck5Md = '1'; fig.dataset.ck5MdBreak = '1';
+            fig.dataset.ck5Md = '1';
             var tbl = document.createElement('table');
             var addRow = function (parent, text, cellTag) {
               var tr = document.createElement('tr');
@@ -1773,18 +1773,11 @@
             p++; continue;
           }
         }
-        if (MD_HR_RE.test(line)) {
-          var hrEl;
-          if (cfg.mdHr) {
-            // 방문자 화면 전용 렌더라 에디터의 HorizontalLine 로드 여부와 무관하게 <hr>.
-            hrEl = document.createElement('hr');
-          } else {
-            // 구분선 토글 꺼짐 → 줄 숨김. 빈 숨김 자리표시만 남겨 경계 역할 유지.
-            hrEl = document.createElement('div');
-            hrEl.hidden = true;
-            hrEl.setAttribute('aria-hidden', 'true');
-          }
-          hrEl.dataset.ck5Md = '1'; hrEl.dataset.ck5MdBreak = '1';
+        if (cfg.mdHr && MD_HR_RE.test(line)) {
+          // 방문자 화면 전용 렌더라 에디터의 HorizontalLine 로드 여부와 무관하게 <hr>.
+          // 토글이 꺼져 있으면 건드리지 않아 원문 글자(`---`) 그대로 보인다.
+          var hrEl = document.createElement('hr');
+          hrEl.dataset.ck5Md = '1';
           el.replaceWith(hrEl); kids[p] = hrEl; p++; continue;
         }
         p++;

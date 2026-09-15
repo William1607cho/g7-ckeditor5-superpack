@@ -315,7 +315,7 @@ class Plugin extends AbstractPlugin
             'md_hr' => $this->booleanSetting(
                 true,
                 ['ko' => '구분선 (`---`)', 'en' => 'Horizontal rule (`---`)'],
-                ['ko' => '줄 전체가 `---`/`***`/`___`(3개 이상)인 줄을 구분선으로 표시합니다(에디터 툴바 설정과 무관). 끄면 해당 줄을 숨깁니다.', 'en' => 'Shows a whole-line `---`/`***`/`___` (3+) as a horizontal rule (regardless of the editor toolbar). When off, the line is hidden.'],
+                ['ko' => '줄 전체가 `---`/`***`/`___`(3개 이상)인 줄을 구분선으로 표시합니다(에디터 툴바 설정과 무관). 끄면 원문 글자 그대로 표시합니다.', 'en' => 'Shows a whole-line `---`/`***`/`___` (3+) as a horizontal rule (regardless of the editor toolbar). When off, the line is shown as literal text.'],
             ),
             // ---- 탭 5: 에디터 스타일 ----
             'editor_style_enabled' => $this->booleanSetting(

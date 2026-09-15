@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-09-15
+
+### Fixed
+
+- **Single list lines separated by a converted block are no longer merged.** A
+  lone `- item` line, a converted heading / blockquote / fenced code block, and
+  another lone `- item` line (e.g. `- a`, `# Heading`, `- b`) used to end up as one
+  `<ul>` placed *before* the heading, because the page's repeated scans skipped
+  already-converted blocks when looking for consecutive lines. Converted blocks now
+  stay in place as boundaries, so the lines render in their original order and
+  repeated scans give the same result. This was listed as a known issue in 1.3.0 and
+  predates it. Output for every other markdown case is unchanged (verified against
+  1.2.1 and 1.3.0 with the same corpus in Chromium).
+
+### Changed
+
+- **`md_hr` off now leaves the line as literal text** (`---`), as in 1.2.1, instead of
+  hiding it. With the toggle on (default), whole-line `---` / `***` / `___` still
+  renders as `<hr>`.
+
 ## [1.3.0] - 2026-09-15
 
 ### Added
@@ -20,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Horizontal rules** (`md_hr`, on by default) — a whole line of `---`, `***` or
   `___` (3+) is rendered as `<hr>`, regardless of the `sirsoft-ckeditor5` toolbar
   setting (the conversion is render-time, so the editor's HorizontalLine plugin is
-  not involved). When the toggle is off, the line is hidden instead.
+  not involved). (1.3.0 hid the line when the toggle was off; see 1.3.1.)
 - Both elements get a checkbox in the *Markdown auto-convert* settings tab. Existing
   installs pick up the defaults without re-saving settings.
 
@@ -31,17 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Output for the existing elements (headings, bold, italic, lists, links, code,
   blockquotes) is unchanged; this was verified by rendering the same corpus with
   1.2.1 and 1.3.0 in Chromium and comparing the resulting DOM.
-
-### Known issues
-
-- **Single list lines separated by a converted block are merged (not fixed).** When
-  a lone `- item` line, a converted heading / blockquote / fenced code block, and
-  another lone `- item` line follow each other (e.g. `- a`, `# Heading`, `- b`),
-  the page's repeated scans skip the already-converted block when looking for
-  consecutive lines, so the two list lines end up as one `<ul>` placed *before* the
-  heading. The result is the same on every load, but the order is wrong. This
-  predates 1.3.0; the new tables and horizontal rules act as boundaries and are not
-  affected.
 
 ## [1.2.1] - 2026-09-12
 

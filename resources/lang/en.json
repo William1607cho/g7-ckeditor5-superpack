@@ -149,7 +149,7 @@
                 "label": "Tables — `| head | head |` followed by `|---|---|` → table (first row = header; bold/links in cells converted)"
             },
             "md_hr": {
-                "label": "Horizontal rule — whole-line `---` → rule (when off, the line is hidden)"
+                "label": "Horizontal rule — whole-line `---` → rule (when off, shown as literal text)"
             },
             "editor_style_enabled": {
                 "label": "Enable editor style",
