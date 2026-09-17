@@ -5,6 +5,58 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-09-17
+
+### Security
+
+- **Link-preview address checks no longer rely on Gnuboard7's validator alone.** On
+  PHP 8.2 that validator lets through CGNAT `100.64.0.0/10` (the range Tailscale
+  uses), `198.18.0.0/15`, `192.0.0.0/24`, and IPv4-mapped IPv6 such as
+  `http://[::ffff:127.0.0.1]/`. The last one reaches the server's own loopback.
+  - Every hop now requires `FILTER_FLAG_GLOBAL_RANGE` plus a plugin block list:
+    `100.64.0.0/10`, `198.18.0.0/15`, `192.0.0.0/24`, `0.0.0.0/8`, `fc00::/7`,
+    `fe80::/10`, `64:ff9b::/96`, `2002::/16`.
+  - IPv4-mapped / IPv4-compatible addresses are checked by their embedded IPv4.
+  - Numeric host forms (`2130706433`, `0177.0.0.1`, `0x7f.1`) are checked as the
+    address they resolve to.
+- **Bounded downloads.** Pages are fetched by a new curl-based fetcher instead of
+  Laravel's HTTP client.
+  - The connection is pinned to the checked IP, and proxy environment variables are
+    ignored.
+  - The server sends `Accept-Encoding: identity` and refuses compressed responses.
+    This rules out decompression bombs.
+  - A non-HTML `Content-Type` is dropped before any body is read.
+  - The body is cut at 1 MiB. Before, the whole response was buffered in memory.
+  - Timeouts: 3 s to connect, 8 s in total across all redirect hops. Before, the
+    limit was 5 s per hop, up to about 20 s.
+- **Rate limits.**
+  - Real outbound fetches are limited to 120 per minute site-wide and 20 per minute
+    per target host. Cache hits don't count. Over the limit, the endpoint answers
+    `failed` without caching it.
+  - The route limit is lowered from 60 to 30 requests per minute per IP.
+
+### Added
+
+- **`g7-ckeditor5-superpack:prune-link-previews`** (`--dry-run`, `--scheduled`).
+  - Deletes link-card cache rows past their TTL (success / failure TTL settings,
+    defaults 7 days / 24 hours).
+  - Keeps the table at 50,000 rows at most by removing the oldest first.
+  - Scheduled daily at `30 0 * * *`, 30 minutes after the video prune.
+  - Before this, expired rows were never deleted.
+
+### Fixed
+
+- A 3xx on the last allowed request now counts as `failed`. Before, a card could be
+  built from the redirect page's `<title>`.
+- A redirect `Location` (or `og:image`) with a non-HTTP scheme is no longer glued onto
+  the current path as if it were relative.
+- `og:image` / favicon URLs longer than the column size are dropped instead of being
+  cut into broken URLs.
+- Invalid UTF-8 in fetched titles is replaced instead of causing a database error.
+- Two requests saving the same new link at the same time no longer fail. The row the
+  other request saved is used instead.
+- Failure log entries record only the host and the curl error code, not the full URL.
+
 ## [1.3.1] - 2026-09-15
 
 ### Fixed
