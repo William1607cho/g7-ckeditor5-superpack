@@ -11,4 +11,8 @@ return [
         'err_signature' => 'Not an MP4 video file. (file signature check failed)',
         'err_generic' => 'An error occurred while processing the video upload.',
     ],
+    'link_preview' => [
+        'prune_done' => 'Link card cache pruned — deleted :expired expired and :overflow over the :max-row cap; :remaining rows remain.',
+        'prune_dry_run' => '[dry-run] Would delete :expired expired and :overflow over the :max-row cap; :remaining rows would remain. Nothing was deleted.',
+    ],
 ];

@@ -15,7 +15,8 @@ use Plugins\G7\Ckeditor5\Superpack\Services\LinkPreviewService;
  *   - ok      : 대표이미지 포함 완전 카드
  *   - minimal : <title> 만 확보 (Cloudflare 챌린지 등) → 제목+도메인+파비콘 최소 카드
  *   - empty/failed : 카드화 불가 → 프론트는 원본 링크 유지
- * 서버가 대신 URL 을 가져오므로 SSRF 방어는 Request(코어 규칙) + Service(해석 IP 재검증) 이중.
+ * 서버가 대신 URL 을 가져오므로 SSRF 방어는 Request(코어 규칙) + Service(IP 재판정·IP 고정·
+ * 수신 크기 상한·외부 요청 빈도 제한) 이중.
  */
 class LinkPreviewController extends PublicBaseController
 {

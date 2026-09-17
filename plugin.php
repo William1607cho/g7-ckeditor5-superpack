@@ -474,6 +474,9 @@ class Plugin extends AbstractPlugin
      * 만료된 동영상 업로드 세션(임시 청크)은 항상 정리한다. 완성 파일 삭제는 설정
      * `video_retention_days` 가 0 보다 클 때만 커맨드 내부에서 수행한다(옵트인).
      *
+     * 링크 카드 캐시는 TTL 이 지난 행과 최대 행 수 초과분을 매일 지운다. 동영상 정리와
+     * 겹치지 않도록 30분 뒤(cron `30 0 * * *`)에 돈다.
+     *
      * @return array<int, array<string, string>>
      */
     public function getSchedules(): array
@@ -483,6 +486,11 @@ class Plugin extends AbstractPlugin
                 'command' => 'g7-ckeditor5-superpack:prune-videos --scheduled',
                 'schedule' => 'daily',
                 'description' => '만료된 동영상 업로드 세션 + (옵트인 시) 미참조 동영상 파일 정리',
+            ],
+            [
+                'command' => 'g7-ckeditor5-superpack:prune-link-previews --scheduled',
+                'schedule' => '30 0 * * *',
+                'description' => 'TTL 이 지난 외부 링크 카드 캐시 + 최대 행 수 초과분 정리',
             ],
         ];
     }

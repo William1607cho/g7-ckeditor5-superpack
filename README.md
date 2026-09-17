@@ -59,6 +59,8 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 - The **`sirsoft-board`** module is needed only for the *video auto-delete* option
   (it looks up whether a video is still referenced by any post body). Every other
   feature works without it, and the option is off by default.
+- PHP extension **`curl`** — used by the link-card fetcher (1.4.0+). Laravel's HTTP
+  client already relies on it in a standard Gnuboard7 install.
 - PHP extension **`imagick`** (optional) — needed only for the *PNG→WebP auto-convert*
   option. If it's not loaded, that option is a silent no-op (PNGs are stored as-is);
   every other feature is unaffected.
@@ -134,9 +136,36 @@ Any bare external link that is not an SNS embed target becomes a card:
 - **Fallback** — the original link is kept as-is (long URLs wrap via CSS).
 
 Metadata is fetched server-side by `GET /api/plugins/g7-ckeditor5-superpack/link-preview`
-with SSRF defenses (private/loopback/link-local/metadata-IP blocking, resolved-IP
-re-validation against DNS rebinding, pinned `CURLOPT_RESOLVE`, manual redirect hops)
-and cached in `g7_superpack_link_previews`.
+(public, 30 requests/minute per IP) and cached in `g7_superpack_link_previews`.
+
+**Server-side safeguards (1.4.0):**
+
+- **Address checks on every hop.** Every resolved IP must be a global address
+  (`FILTER_FLAG_GLOBAL_RANGE`), and the plugin also blocks `100.64.0.0/10` (CGNAT,
+  e.g. Tailscale), `198.18.0.0/15`, `192.0.0.0/24`, `0.0.0.0/8`, `fc00::/7`,
+  `fe80::/10`, `64:ff9b::/96` and `2002::/16`.
+  - IPv4-mapped / IPv4-compatible IPv6 addresses (`::ffff:127.0.0.1`) are checked by
+    their embedded IPv4.
+  - Numeric host forms (`2130706433`, `0177.0.0.1`, `0x7f.1`) are checked as the IP
+    they resolve to.
+  - These checks apply even when Gnuboard7's own URL validator would let the address
+    through.
+- **Connection pinning.** The connection is pinned to the checked IP
+  (`CURLOPT_RESOLVE`), and proxy environment variables are ignored.
+- **Redirects.** They are followed manually, up to 4 requests per link. A 3xx on the
+  last request counts as failed.
+- **Bounded download.**
+  - The server asks for `Accept-Encoding: identity`; a compressed response counts as
+    failed.
+  - A non-HTML `Content-Type` is dropped before the body is read.
+  - The body is cut at 1 MiB.
+  - Timeouts: 3 s to connect, 8 s in total across all hops.
+- **Rate limits on real fetches only.** At most 120 per minute site-wide and 20 per
+  minute per target host. Over the limit, the answer is `failed` and nothing is cached.
+- **Cache cleanup.** A daily `g7-ckeditor5-superpack:prune-link-previews` command
+  (00:30 in the scheduler's time) deletes rows past their TTL and keeps the table at
+  50,000 rows at most by removing the oldest first. Run it by hand with `--dry-run`
+  to see the counts without deleting anything.
 
 **Settings:** master on/off · minimal-card on/off · thumbnail size (px) · success
 cache TTL (days) · failure cache TTL (hours).
@@ -312,6 +341,11 @@ followed by that feature's detailed options:
 - Playback depends on the browser's codec support (see the codec note above).
 - **PNG→WebP conversion needs PHP's `imagick` extension.** If it's not loaded, the
   conversion is silently skipped (PNGs are stored as-is) — no error, no crash.
+- **Link cards: DNS lookup time is outside the 8-second budget.** Lookups use
+  PHP's resolver, which has no per-call timeout. A slow DNS answer can make one
+  link-preview request take longer than 8 s.
+- **Link cards: non-UTF-8 pages** (e.g. EUC-KR) are not converted. Invalid bytes
+  are replaced, so titles from such pages can show replacement characters.
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
@@ -323,6 +357,15 @@ followed by that feature's detailed options:
 - **외부 링크 카드화** — 임베드 대상이 아닌 일반 외부 링크를 대표이미지+제목+요약+도메인
   카드(또는 파비콘+제목+도메인 최소 카드)로 바꿉니다. 메타 취득은 서버가 대행하고 캐시합니다.
   설정: 전체 온/오프 · 최소 카드 온/오프 · 이미지 크기 · 성공/실패 캐시 보존기간.
+  서버 보호장치(1.4.0):
+  - 내부망·CGNAT(Tailscale 등)·IPv4-mapped 주소와 숫자형 IP 표기를 매 홉마다 차단합니다.
+  - 판정한 IP로 접속을 고정하고, 프록시 환경변수는 무시합니다.
+  - 압축 응답과 HTML이 아닌 응답은 받지 않습니다. 본문은 1 MiB까지만 받고, 전체 대기 시간은 8초입니다.
+  - 실제 외부 요청 빈도를 제한합니다(사이트 전체 분당 120회, 대상 호스트당 분당 20회).
+    한도를 넘으면 실패로 응답하고 캐시에 남기지 않습니다.
+  - 캐시 정리 명령 `g7-ckeditor5-superpack:prune-link-previews`가 매일 실행됩니다.
+    보존기간이 지난 행을 지우고, 테이블을 최대 5만 행으로 유지합니다.
+    `--dry-run`을 붙이면 지우지 않고 건수만 봅니다.
 - **로컬 동영상 업로드** — 에디터 위 "동영상 업로드" 버튼으로 MP4/MOV/WebM 을 청크 업로드합니다.
   편집 화면의 미디어 라이브러리에서 카드를 클릭하면 커서 위치에 삽입되고, S/M/L 크기를 고를 수
   있습니다. 방문자 화면에서는 링크가 재생 플레이어로 바뀝니다. `.mp4` 는 항상, `.mov`·`.webm` 은

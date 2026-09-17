@@ -13,8 +13,9 @@ use Plugins\G7\Ckeditor5\Superpack\Http\Controllers\VideoUploadController;
 
 // 외부 링크 OG 카드 프리뷰 (공개 접근).
 // 서버가 대상 URL 을 대신 fetch → SSRF 방어(Request 코어 규칙 + Service 해석 IP 재검증).
+// IP 당 분당 30회. 실제 외부 요청은 Service 가 별도로 제한한다(전체 120·호스트당 20/분).
 Route::get('link-preview', [LinkPreviewController::class, 'show'])
-    ->middleware('throttle:60,1')
+    ->middleware('throttle:30,1')
     ->name('api.g7-ckeditor5-superpack.link-preview');
 
 /*
