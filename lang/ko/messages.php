@@ -11,4 +11,8 @@ return [
         'err_signature' => 'MP4 동영상 파일이 아닙니다. (파일 형식 검증 실패)',
         'err_generic' => '동영상 업로드 처리 중 오류가 발생했습니다.',
     ],
+    'link_preview' => [
+        'prune_done' => '링크 카드 캐시 정리 완료 — 만료 :expired건, 상한(:max건) 초과 :overflow건 삭제, 남은 행 :remaining건.',
+        'prune_dry_run' => '[dry-run] 삭제 대상 — 만료 :expired건, 상한(:max건) 초과 :overflow건. 정리 후 남을 행 :remaining건. 실제로 지우지 않았습니다.',
+    ],
 ];
