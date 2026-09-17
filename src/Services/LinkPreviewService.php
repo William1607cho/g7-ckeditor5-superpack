@@ -133,10 +133,12 @@ class LinkPreviewService
      * TTL 이 지난 행과 상한 초과분을 지운다.
      *
      * @param  bool  $dryRun  true 면 지우지 않고 대상 건수만 센다
+     * @param  int|null  $maxRows  최대 행 수 (null = {@see self::MAX_ROWS}, 테스트용 인자)
      * @return array{expired:int, overflow:int, remaining:int}
      */
-    public function prune(bool $dryRun = false): array
+    public function prune(bool $dryRun = false, ?int $maxRows = null): array
     {
+        $maxRows = max(0, $maxRows ?? self::MAX_ROWS);
         $okBefore = $this->staleThreshold('ok');
         $failBefore = $this->staleThreshold('failed');
 
@@ -152,7 +154,7 @@ class LinkPreviewService
 
         if ($dryRun) {
             $expired = $expiredQuery()->count();
-            $overflow = max(0, $total - $expired - self::MAX_ROWS);
+            $overflow = max(0, $total - $expired - $maxRows);
 
             return ['expired' => $expired, 'overflow' => $overflow, 'remaining' => $total - $expired - $overflow];
         }
@@ -163,11 +165,15 @@ class LinkPreviewService
             if ($ids->isEmpty()) {
                 break;
             }
-            $expired += LinkPreview::query()->whereIn('id', $ids)->delete();
+            $deleted = LinkPreview::query()->whereIn('id', $ids)->delete();
+            if ($deleted === 0) {
+                break;
+            }
+            $expired += $deleted;
         }
 
         $overflow = 0;
-        $excess = LinkPreview::query()->count() - self::MAX_ROWS;
+        $excess = LinkPreview::query()->count() - $maxRows;
         while ($excess > 0) {
             $ids = LinkPreview::query()->orderBy('fetched_at')->orderBy('id')
                 ->limit(min(self::PRUNE_CHUNK, $excess))->pluck('id');
@@ -659,7 +665,9 @@ class LinkPreviewService
     private function absolutize(string $url, string $base): string
     {
         $url = trim($url);
-        if ($url === '' || preg_match('#^https?://#i', $url)) {
+        // 스킴이 있으면(`ftp:`, `javascript:` 포함) 그대로 둔다 — 상대 경로로 붙이지 않고
+        // 호출부의 판정에서 거부되게 한다.
+        if ($url === '' || preg_match('#^[a-z][a-z0-9+.\-]*:#i', $url)) {
             return $url;
         }
         if (str_starts_with($url, '//')) {
