@@ -46,7 +46,7 @@
     var domain = (p.domain || '').trim();
     var fav = (p.favicon || '').trim();
     var favPart = fav
-      ? '<div class="ck5-linkcard__favwrap"><img class="ck5-linkcard__favicon" src="' + esc(fav) + '" alt="" loading="lazy" referrerpolicy="no-referrer" width="18" height="18"></div>'
+      ? '<div class="ck5-linkcard__favwrap"><img class="ck5-linkcard__favicon" src="' + esc(fav) + '" alt="" referrerpolicy="no-referrer" width="18" height="18"></div>'
       : '';
     return '<a class="ck5-linkcard ck5-linkcard--minimal" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer nofollow">'
       + favPart
@@ -157,10 +157,13 @@
 
     var favEl = holder.querySelector('.ck5-linkcard__favicon');
     if (favEl) {
-      favEl.addEventListener('error', function () {
+      // 파비콘 칸은 CSS 로 숨겨 두고 불러오기에 성공했을 때만 보인다. 실패하면 숨긴 채로 둔다(카드 모양 불변).
+      var showFav = function () {
         var w = favEl.closest('.ck5-linkcard__favwrap');
-        if (w) w.remove();
-      }, { once: true });
+        if (w && favEl.naturalWidth > 0) w.classList.add('is-loaded');
+      };
+      if (favEl.complete) showFav();
+      else favEl.addEventListener('load', showFav, { once: true });
     }
 
     if (kind === 'fallback') {
@@ -195,6 +198,7 @@
       + '.ck5-linkcard--minimal{max-width:420px;border-style:dashed;background:#f8fafc;align-items:center;}'
       + '.ck5-linkcard--minimal:hover{border-color:#cbd5e1;box-shadow:none;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__favwrap{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:12px;}'
+      + '.ck5-linkcard .ck5-linkcard__favwrap:not(.is-loaded){display:none;}'
       + '.ck5-linkcard__favicon{width:18px;height:18px;object-fit:contain;display:block;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__body{padding:9px 12px;gap:2px;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__title{font-size:.875rem;-webkit-line-clamp:1;}'

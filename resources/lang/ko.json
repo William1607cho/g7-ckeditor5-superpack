@@ -7,6 +7,10 @@
         },
         "video": {
             "open": "동영상 원본 열기"
+        },
+        "code_copy": {
+            "label": "코드 복사",
+            "done": "복사됨"
         }
     },
     "editor": {
@@ -27,6 +31,12 @@
             "size_sm": "소",
             "size_md": "중",
             "size_lg": "대"
+        },
+        "image": {
+            "too_large_client_check": "이미지 파일이 너무 큽니다(최대 {max}MB). 더 작은 이미지로 다시 시도해주세요.",
+            "upload_pending_submit_blocked": "이미지 업로드가 끝날 때까지 잠시만 기다려주세요. 업로드가 끝나면 다시 눌러주세요.",
+            "uploading_button_label": "업로드중",
+            "upload_timeout": "이미지 업로드가 너무 오래 걸려 취소되었습니다. 파일 크기나 네트워크 상태를 확인한 뒤 다시 시도해주세요."
         }
     },
     "settings": {

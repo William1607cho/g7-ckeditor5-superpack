@@ -2,6 +2,8 @@
    *  통합 스캔
    * ================================================================ */
 
+  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
+
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
@@ -115,7 +117,9 @@
     }
 
     if (didEmbed) {
-      [2000, 5000, 10000].forEach(function (ms) { window.setTimeout(reprocessPresent, ms); });
+      // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
+      reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
+      reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
     }
   }
 

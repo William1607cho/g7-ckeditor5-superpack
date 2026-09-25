@@ -463,7 +463,7 @@
     var domain = (p.domain || '').trim();
     var fav = (p.favicon || '').trim();
     var favPart = fav
-      ? '<div class="ck5-linkcard__favwrap"><img class="ck5-linkcard__favicon" src="' + esc(fav) + '" alt="" loading="lazy" referrerpolicy="no-referrer" width="18" height="18"></div>'
+      ? '<div class="ck5-linkcard__favwrap"><img class="ck5-linkcard__favicon" src="' + esc(fav) + '" alt="" referrerpolicy="no-referrer" width="18" height="18"></div>'
       : '';
     return '<a class="ck5-linkcard ck5-linkcard--minimal" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer nofollow">'
       + favPart
@@ -574,10 +574,13 @@
 
     var favEl = holder.querySelector('.ck5-linkcard__favicon');
     if (favEl) {
-      favEl.addEventListener('error', function () {
+      // 파비콘 칸은 CSS 로 숨겨 두고 불러오기에 성공했을 때만 보인다. 실패하면 숨긴 채로 둔다(카드 모양 불변).
+      var showFav = function () {
         var w = favEl.closest('.ck5-linkcard__favwrap');
-        if (w) w.remove();
-      }, { once: true });
+        if (w && favEl.naturalWidth > 0) w.classList.add('is-loaded');
+      };
+      if (favEl.complete) showFav();
+      else favEl.addEventListener('load', showFav, { once: true });
     }
 
     if (kind === 'fallback') {
@@ -612,6 +615,7 @@
       + '.ck5-linkcard--minimal{max-width:420px;border-style:dashed;background:#f8fafc;align-items:center;}'
       + '.ck5-linkcard--minimal:hover{border-color:#cbd5e1;box-shadow:none;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__favwrap{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:12px;}'
+      + '.ck5-linkcard .ck5-linkcard__favwrap:not(.is-loaded){display:none;}'
       + '.ck5-linkcard__favicon{width:18px;height:18px;object-fit:contain;display:block;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__body{padding:9px 12px;gap:2px;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__title{font-size:.875rem;-webkit-line-clamp:1;}'
@@ -895,7 +899,8 @@
     injectUploadStyle();
 
     var exts = allowedVideoExts(cfg);
-    var accept = exts.map(function (x) { return '.' + x; }).concat(['video/mp4', 'video/quicktime', 'video/webm']).join(',');
+    var MIME = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' }; // 허용 확장자에 맞는 MIME 만
+    var accept = exts.map(function (x) { return '.' + x; }).concat(exts.map(function (x) { return MIME[x]; }).filter(Boolean)).join(',');
 
     var bar = document.createElement('div');
     bar.className = 'ck5sp-vbar';
@@ -1179,6 +1184,9 @@
     if (!domRoot) return;
     if (domRoot.closest('.g7ce-wrapper')) return; // 댓글 편집기는 이미지 업로드 경로가 없다
     container.__ck5spPasteImage = true;
+    for (var pr = pasteImageRoots.length - 1; pr >= 0; pr--) {
+      if (!pasteImageRoots[pr].domRoot || !pasteImageRoots[pr].domRoot.isConnected) pasteImageRoots.splice(pr, 1); // SPA 이동으로 끊긴 편집기 정리
+    }
     pasteImageRoots.push({ domRoot: domRoot, editor: editor });
     ensurePasteImageListener();
     attachSubmitButtonUploadState(editor, domRoot);
@@ -2173,6 +2181,8 @@
    *  통합 스캔
    * ================================================================ */
 
+  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
+
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
@@ -2286,7 +2296,9 @@
     }
 
     if (didEmbed) {
-      [2000, 5000, 10000].forEach(function (ms) { window.setTimeout(reprocessPresent, ms); });
+      // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
+      reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
+      reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
     }
   }
 

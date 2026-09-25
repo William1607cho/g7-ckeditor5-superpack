@@ -9,7 +9,8 @@
     injectUploadStyle();
 
     var exts = allowedVideoExts(cfg);
-    var accept = exts.map(function (x) { return '.' + x; }).concat(['video/mp4', 'video/quicktime', 'video/webm']).join(',');
+    var MIME = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' }; // 허용 확장자에 맞는 MIME 만
+    var accept = exts.map(function (x) { return '.' + x; }).concat(exts.map(function (x) { return MIME[x]; }).filter(Boolean)).join(',');
 
     var bar = document.createElement('div');
     bar.className = 'ck5sp-vbar';

@@ -88,6 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Image pasting is no longer intercepted in the comment box.** The comment editor
   has no image upload, but pasted images were caught and then dropped. The
   paste handler and upload timeout guard are now attached to the post editor only.
+- **Missing translations added.** The image paste size notice, the "wait for the upload" notice, the "Uploading" button label, the upload timeout notice and the copy button labels now come from the language files (English and Korean) instead of built-in Korean text.
+- **Minimal link cards no longer jump after they appear.** The favicon slot stays hidden until the icon actually loads, so a blocked favicon no longer removes the slot and shifts the title.
+- **Stale editors are dropped from the image paste list**, so the list no longer grows as you move between pages.
+- **Embed re-processing is scheduled once per scan burst** (2, 5 and 10 seconds after the last scan) instead of stacking new timers on every scan.
+- **The video file picker filter follows the allowed formats**, so formats that are turned off are no longer offered.
 
 ### Internal
 

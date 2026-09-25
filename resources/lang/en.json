@@ -7,6 +7,10 @@
         },
         "video": {
             "open": "Open video source"
+        },
+        "code_copy": {
+            "label": "Copy code",
+            "done": "Copied"
         }
     },
     "editor": {
@@ -27,6 +31,12 @@
             "size_sm": "S",
             "size_md": "M",
             "size_lg": "L"
+        },
+        "image": {
+            "too_large_client_check": "The image is too large (max {max}MB). Please try a smaller image.",
+            "upload_pending_submit_blocked": "Please wait until the image upload finishes, then press the button again.",
+            "uploading_button_label": "Uploading",
+            "upload_timeout": "The image upload took too long and was cancelled. Check the file size or your network and try again."
         }
     },
     "settings": {

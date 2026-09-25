@@ -125,6 +125,9 @@
     if (!domRoot) return;
     if (domRoot.closest('.g7ce-wrapper')) return; // 댓글 편집기는 이미지 업로드 경로가 없다
     container.__ck5spPasteImage = true;
+    for (var pr = pasteImageRoots.length - 1; pr >= 0; pr--) {
+      if (!pasteImageRoots[pr].domRoot || !pasteImageRoots[pr].domRoot.isConnected) pasteImageRoots.splice(pr, 1); // SPA 이동으로 끊긴 편집기 정리
+    }
     pasteImageRoots.push({ domRoot: domRoot, editor: editor });
     ensurePasteImageListener();
     attachSubmitButtonUploadState(editor, domRoot);
