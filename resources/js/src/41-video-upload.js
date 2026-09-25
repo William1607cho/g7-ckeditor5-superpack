@@ -7,13 +7,13 @@
   var VIDEO_CHUNK = '/api/plugins/' + IDENTIFIER + '/video/upload/chunk';
   var VIDEO_COMPLETE = '/api/plugins/' + IDENTIFIER + '/video/upload/complete';
 
-  function authToken() {
-    try {
-      if (window.G7Core && window.G7Core.apiClient && window.G7Core.apiClient.getToken) {
-        return window.G7Core.apiClient.getToken() || '';
-      }
-    } catch (e) {}
-    try { return localStorage.getItem('auth_token') || ''; } catch (e) { return ''; }
+  /** 설정에 따른 허용 동영상 확장자 목록 (소문자, .mp4 항상 포함) */
+  function allowedVideoExts(cfg) {
+    var e = ['mp4'];
+    if (cfg.videoAllowMov) e.push('mov');
+    if (cfg.videoAllowWebm) e.push('webm');
+    if (cfg.videoAllowM4v) e.push('m4v');
+    return e;
   }
 
   function injectUploadStyle() {
@@ -67,20 +67,6 @@
     document.head.appendChild(el);
   }
 
-  /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
-  function editorInstanceNear(container) {
-    var scopes = [container, container.parentElement, container.nextElementSibling];
-    for (var i = 0; i < scopes.length; i++) {
-      var sc = scopes[i];
-      if (!sc || !sc.querySelectorAll) continue;
-      var eds = sc.querySelectorAll('.ck-editor__editable_inline, .ck-editor__editable');
-      for (var j = 0; j < eds.length; j++) {
-        if (eds[j].ckeditorInstance) return eds[j].ckeditorInstance;
-      }
-    }
-    return null;
-  }
-
   /** URL 에 size 힌트를 얹는다 ('md' 는 파라미터 없음 = 기본). GHS 는 href 쿼리는 보존함(실측). */
   function videoUrlWithSize(url, size) {
     var base = String(url).replace(/[?&]size=(sm|md|lg)\b/gi, '').replace(/[?&]$/, '');
@@ -122,10 +108,15 @@
 
   function humanMb(bytes) { return (bytes / 1024 / 1024).toFixed(1); }
 
+  /** 로그인 토큰이 있으면 Bearer 인증 헤더, 없으면 빈 객체(동영상 업로드·라이브러리 요청 공용). */
+  function authHeaders() {
+    var token = authToken();
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
   /** 파일 하나를 청크로 업로드. onProgress(0..1), 완료 시 resolve({id,url,name}). */
   function chunkedUpload(file, cfg, onProgress) {
-    var token = authToken();
-    var headers = token ? { Authorization: 'Bearer ' + token } : {};
+    var headers = authHeaders();
     var totalChunks = Math.max(1, Math.ceil(file.size / (cfg.videoChunkMb * 1024 * 1024)));
 
     return fetch(VIDEO_INIT, {

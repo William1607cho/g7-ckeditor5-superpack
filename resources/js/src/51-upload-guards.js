@@ -59,9 +59,7 @@
       if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
 
       var msg = t('editor.image.upload_pending_submit_blocked', '이미지 업로드가 끝날 때까지 잠시만 기다려주세요. 업로드가 끝나면 다시 눌러주세요.');
-      var toast = window.G7Core && window.G7Core.toast;
-      if (toast && typeof toast.warning === 'function') toast.warning(msg);
-      else { try { window.alert(msg); } catch (e) {} }
+      notify('warning', msg);
     }, true);
   }
 
@@ -106,7 +104,7 @@
     var labelNode = null;
     var originalLabel = null; // null = 현재 "업로드중" 상태가 아님 (하드코딩 금지 — 실제 버튼 원문을 저장/복원)
 
-    pendingActions.on('change:hasAny', function (evt, name, value) {
+    function onHasAny(evt, name, value) {
       if (value) {
         if (originalLabel === null) {
           labelNode = findButtonLabelNode(btn);
@@ -119,7 +117,8 @@
         btn.disabled = false;
         originalLabel = null;
       }
-    });
+    }
+    try { pendingActions.on('change:hasAny', onHasAny); } catch (e) { warnOnce('upload state', e); }
   }
 
   /* ================================================================ *
@@ -169,7 +168,9 @@
   function removeStuckUploadImageElement(editor, uploadId) {
     var root = editor.model.document.getRoot();
     var target = null;
-    for (var value of editor.model.createRangeIn(root)) {
+    var walker = editor.model.createRangeIn(root).getWalker({ ignoreElementEnd: true });
+    for (var step = walker.next(); !step.done; step = walker.next()) {
+      var value = step.value;
       var item = value.item;
       if (item.getAttribute && item.getAttribute('uploadId') === uploadId) {
         target = item;
@@ -204,9 +205,7 @@
         try { fileRepo.destroyLoader(loader); } catch (e) {}
 
         var msg = t('editor.image.upload_timeout', '이미지 업로드가 너무 오래 걸려 취소되었습니다. 파일 크기나 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
-        var toast = window.G7Core && window.G7Core.toast;
-        if (toast && typeof toast.error === 'function') toast.error(msg);
-        else { try { window.alert(msg); } catch (e2) {} }
+        notify('error', msg);
       }, UPLOAD_STUCK_TIMEOUT_MS);
 
       function onRemoved(evt2, removedItem) {
@@ -218,4 +217,13 @@
       fileRepo.loaders.on('remove', onRemoved);
     });
   }
+
+  // 제출 가드는 컨테이너마다 불리지만 document 리스너는 한 번만 건다(submitGuardBound).
+  core.section({
+    name: 'upload-guards',
+    scope: 'editor',
+    editorOrder: 30,
+    load: 'eager',
+    editor: ensureSubmitGuardListener
+  });
 

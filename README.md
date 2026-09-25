@@ -81,8 +81,8 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 cd /path/to/gnuboard7/plugins
 
 # a release tag (recommended)
-curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.5.0.tar.gz | tar xz
-mv g7-ckeditor5-superpack-1.5.0 g7-ckeditor5-superpack
+curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.6.0.tar.gz | tar xz
+mv g7-ckeditor5-superpack-1.6.0 g7-ckeditor5-superpack
 
 # ...or the latest main
 git clone https://github.com/William1607cho/g7-ckeditor5-superpack.git
@@ -344,6 +344,7 @@ autoformat, no new shortcuts).
   alone.
 - Saved code is always styled for display (smaller monospace, soft background, long
   lines scroll sideways, a dark-mode palette), even when the buttons are turned off.
+  Markdown code (`` `inline` `` and fenced blocks) uses the same look.
 - Every code block in a viewed post (toolbar code blocks and Markdown ```` ``` ````
   blocks) gets a copy button in its top-right corner: half-transparent until hovered
   or focused, it stays put while the block scrolls sideways, copies the code exactly
@@ -399,12 +400,21 @@ followed by that feature's detailed options:
 
 ## Development
 
-- The front-end source lives in `resources/js/src/` as 14 numbered pieces, one per
-  feature area (`01-head.js` … `09a-code-format.js`, `09b-code-copy.js` …
-  `12-scan-boot.js`). They are consecutive slices of one IIFE, so a
-  piece is not a complete script on its own. `12-scan-boot.js` closes the IIFE, so a
-  new piece goes between existing ones as the previous number plus a lowercase letter
-  (e.g. `09a-code-format.js`); names are sorted with `LC_ALL=C`.
+### Source layout
+
+The front-end source lives in `resources/js/src/` as numbered pieces. They are
+consecutive slices of one IIFE, so a piece is not a complete script on its own.
+Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
+
+| Band | Pieces | Contents |
+|---|---|---|
+| `00` | `00-head.js` | Opens the IIFE, `IDENTIFIER`, `logger` |
+| `01`–`09` | `01-settings`, `02-i18n`, `03-util`, `05-area`, `06-editors`, `06-registry`, `08-scheduler` | Core: settings (`readSettings`), `t`, shared helpers (`esc`, `authToken`, `warnOnce`, …), editing-area helpers, the section registry and the scheduler |
+| `10`–`79` | `10`/`11` Markdown, `20`/`21` SNS embeds, `30` link cards, `40`–`42` video, `50`/`51` image paste and upload guards, `60` editor style, `70` code formatting, `71` code copy | Feature sections. Ten numbers per feature; a one-digit step is a sub-file of the same feature |
+| `80`–`89` | — | Spare |
+| `90` | `90-boot.js` | Boot (`init`, handler registration, `window.__G7Ckeditor5Superpack`) |
+| `99` | `99-tail.js` | Closes the IIFE |
+
 - `scripts/build-js.sh` joins the pieces in name order and writes the result to both
   `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
   identical). `scripts/build-js.sh --check` writes nothing and exits `1` if either
@@ -412,6 +422,77 @@ followed by that feature's detailed options:
 - After editing a piece, always run `scripts/build-js.sh` and commit the rebuilt
   files. No npm or bundler is involved. `scripts/` is not included in release
   archives.
+
+### Core, registry and scheduler
+
+- `core` is a local object inside the IIFE. The only `window` names the script
+  touches are `window.__G7Ckeditor5Superpack` (with `rescan()`) and the
+  `window.CKEDITOR` accessor used by code formatting. `core` has `core.id`,
+  `core.section(spec)` and `core.ns(name)` (a shared object for pieces of the same
+  feature).
+- Each section registers itself with `core.section({...})` at the end of its piece.
+  The fields are `name`, `scope` (`visitor` / `editor` / `both`), `order` (visitor
+  pass), `editorOrder` (editor pass), `load`, `gate`, `enabled`, `styles` and the
+  hooks `install`, `boot`, `visitor`, `visitorEnd`, `editor`, `editorEnd`.
+  `settings` and `guard` are accepted but not used yet.
+  - `visitor(scope, cfg, ctx)` runs once per visitor `.ck-content` (editing areas
+    are skipped), in `order`. `ctx.once(key, fn)` and `ctx.has(key)` share state
+    within one scan. `visitorEnd(ctx, cfg)` runs after the scan.
+  - `gate(cfg)`: if no section's gate is true, the page scan runs only the sections
+    without a gate, once on the root (today that is code copy).
+  - `editor(container)` runs once per post-editor container that has a live editor,
+    in `editorOrder`. `editorEnd()` runs after each editor scan. `boot(cfg)` runs
+    once when the script starts. `install()` runs immediately at registration, while
+    the script is loading.
+  - `load` accepts only `'eager'` in 1.6.0. It is a placeholder for lazy-loaded
+    sections later.
+- Current order: visitor pass `markdown` 10 → `code-copy` 20 → `video-render` 30 →
+  `sns-embed` 40 → `link-card` 50; editor pass `video-upload` 10 → `image-paste` 20 →
+  `upload-guards` 30; `editor-style` has `boot` and `editorEnd`; `code-format` has
+  `install`. A section that reads another section's result must use a larger order.
+- The scheduler (`08-scheduler.js`) owns the only MutationObserver (on
+  `document.body`, `childList` + `subtree`). An added node that is, is inside, or
+  contains `.ck-content` requests a visitor scan after 200 ms, restarted on every
+  such change. Every change requests an editor scan after 250 ms, a fixed window
+  that ignores changes while it is pending. Boot runs both scans after two animation
+  frames, then again at 400 ms and 900 ms. Sections must not add their own observers
+  or scan timers.
+- Safety rule: if a hook throws, only that section is skipped and
+  `warnOnce(tag, reason)` logs a single `console.warn`; the rest keeps running. A
+  section that touches the editor should also do nothing and leave the editor as it
+  is when the structure is not what it expects.
+
+### Adding a feature section
+
+1. Pick a free number in the section band (10–79) and create
+   `resources/js/src/NN-<name>.js`. Wrap the whole file in
+   `(function (core) { 'use strict'; … })(core);` and end it with one
+   `core.section({ … })` call. Do not create top-level names outside the wrapper.
+   Share anything another piece needs through `core.ns('<feature>')` only. (Sections
+   written before 1.6.0 are not wrapped yet; they will be wrapped one at a time when
+   needed.)
+2. Fill the entry: `name`, `scope`, `order` and/or `editorOrder`, `load: 'eager'`,
+   `gate` and `enabled` if the section has an on/off setting, `styles` (the
+   `<style>` ids it creates) and the hooks it needs.
+3. Use the core helpers (`readSettings`, `t`, `esc`, `warnOnce`, `isEditingArea`,
+   `editorInstanceNear`, …) instead of your own copies. Do not add MutationObservers
+   or scan timers.
+4. If the section has settings, update all eight places:
+   1. `plugin.php` `getSettingsSchema()` (type, default, labels)
+   2. `plugin.php` `getConfigValues()` default values
+   3. `config/settings/defaults.json` `defaults`
+   4. `config/settings/defaults.json` `frontend_schema` (`expose: true` for values
+      the script reads)
+   5. `resources/layouts/admin/plugin_settings.json` tab button
+   6. `resources/layouts/admin/plugin_settings.json` tab panel (fields and hints)
+   7. `resources/layouts/admin/plugin_settings.json` form `schema`
+   8. `resources/lang/ko.json` and `resources/lang/en.json` keys (tab, fields,
+      hints)
+
+   Then read the new key in `readSettings()` (`01-settings.js`).
+5. Run `scripts/build-js.sh` and `scripts/build-js.sh --check`, and commit the piece
+   together with both built files.
+6. Add the section to the order list above, the feature list and CHANGELOG.
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
@@ -481,6 +562,7 @@ followed by that feature's detailed options:
   `<code>`, 코드 블록은 `<pre><code class="language-plaintext">`(일반 텍스트, 문법 강조 없음)로
   저장되어, 코드 안의 글자는 마크다운 변환이나 위키 링크(`[[…]]`)로 바뀌지 않고 그대로 보입니다.
   설정: 버튼 온/오프(기본 ON). 끄면 버튼만 사라지고 이미 저장된 코드의 표시 스타일은 그대로입니다.
+  마크다운 코드(`` `인라인` ``·```` ``` ```` 블록)도 툴바 코드와 같은 모양으로 보입니다.
   글 보기 화면의 코드 블록(툴바 코드 블록·마크다운 ```` ``` ```` 블록)에는 오른쪽 위에 반투명 복사
   버튼이 붙습니다. 가로 스크롤해도 제자리에 있고, 들여쓰기·탭까지 그대로 복사하며, 복사되면
   1.5초간 체크 표시로 바뀝니다. 인라인 코드·편집기에는 붙지 않고, 인쇄 시 숨겨지며, 설정과
@@ -490,15 +572,73 @@ followed by that feature's detailed options:
 
 ### 개발
 
-- 프런트 소스는 `resources/js/src/`에 기능 영역별로 번호 붙은 조각 14개(`01-head.js` …
-  `09a-code-format.js`, `09b-code-copy.js` … `12-scan-boot.js`)로 있습니다. 조각은 하나의 IIFE를 이어서 자른 것이라, 조각 하나만으로는 완결된 스크립트가 아닙니다.
-  `12-scan-boot.js`가 IIFE를 닫으므로 새 조각은 기존 번호 사이에 "앞 번호 + 소문자"로 넣습니다
-  (예: `09a-code-format.js`). 이름 정렬은 `LC_ALL=C` 기준입니다.
+#### 소스 구성
+
+프런트 소스는 `resources/js/src/`에 번호 붙은 조각으로 있습니다. 조각은 하나의 IIFE를 이어서 자른 것이라,
+조각 하나만으로는 완결된 스크립트가 아닙니다. 이름 정렬은 `LC_ALL=C` 기준이고, 번호 대역이 조각의 역할을 나타냅니다.
+
+| 대역 | 조각 | 내용 |
+|---|---|---|
+| `00` | `00-head.js` | IIFE 열기, `IDENTIFIER`, `logger` |
+| `01`~`09` | `01-settings`, `02-i18n`, `03-util`, `05-area`, `06-editors`, `06-registry`, `08-scheduler` | 코어: 설정(`readSettings`), `t`, 공용 도우미(`esc`·`authToken`·`warnOnce` 등), 편집 영역 도우미, 섹션 등록부, 스케줄러 |
+| `10`~`79` | `10`·`11` 마크다운, `20`·`21` SNS 임베드, `30` 링크 카드, `40`~`42` 동영상, `50`·`51` 이미지 붙여넣기·업로드 보호, `60` 에디터 스타일, `70` 코드 서식, `71` 코드 복사 | 기능 섹션. 기능마다 10 단위, 한 자리 차이는 같은 기능의 부속 파일 |
+| `80`~`89` | — | 예비 |
+| `90` | `90-boot.js` | 부팅(`init`, 핸들러 등록, `window.__G7Ckeditor5Superpack`) |
+| `99` | `99-tail.js` | IIFE 닫기 |
+
 - `scripts/build-js.sh`가 조각을 이름 순으로 이어 붙여 `dist/js/plugin.iife.js`와
   `resources/js/index.js` 두 곳에 씁니다(두 파일은 항상 같습니다). `--check`를 붙이면 파일을
   쓰지 않고, 어느 한쪽이라도 결합 결과와 다르면 `1`로 끝납니다.
 - 조각을 고친 뒤에는 반드시 `scripts/build-js.sh`를 실행하고 다시 만든 파일을 함께
   커밋합니다. npm·번들러는 쓰지 않습니다. `scripts/`는 릴리스 압축 파일에 들어가지 않습니다.
+
+#### 코어·등록부·스케줄러
+
+- `core`는 IIFE 안의 지역 객체입니다. 스크립트가 건드리는 `window` 이름은 `window.__G7Ckeditor5Superpack`(`rescan()`)와
+  코드 서식이 쓰는 `window.CKEDITOR` 접근자뿐입니다. `core`에는 `core.id`, `core.section(spec)`,
+  `core.ns(name)`(같은 기능의 조각끼리 나누는 객체)이 있습니다.
+- 각 섹션은 자기 조각 끝에서 `core.section({...})`으로 등록합니다. 항목은 `name`, `scope`(`visitor`·`editor`·`both`),
+  `order`(방문자 순서), `editorOrder`(편집기 순서), `load`, `gate`, `enabled`, `styles`와 훅
+  `install`·`boot`·`visitor`·`visitorEnd`·`editor`·`editorEnd`입니다. `settings`·`guard`는 받기만 하고 아직 쓰지 않습니다.
+  - `visitor(scope, cfg, ctx)`는 방문자 `.ck-content`마다(편집 영역 제외) `order` 순으로 불립니다.
+    `ctx.once(key, fn)`·`ctx.has(key)`로 스캔 한 번 동안 상태를 나눕니다. `visitorEnd(ctx, cfg)`는 스캔 끝에 불립니다.
+  - `gate(cfg)`: 게이트가 참인 섹션이 하나도 없으면, 게이트가 없는 섹션만 문서 전체에 한 번 돕니다(지금은 코드 복사).
+  - `editor(container)`는 편집기가 살아 있는 게시글 본문 에디터 컨테이너마다 `editorOrder` 순으로 불립니다.
+    `editorEnd()`는 편집기 스캔마다 끝에 불립니다. `boot(cfg)`는 시작할 때 한 번, `install()`은 등록하는 즉시(스크립트를 불러오는 중에) 불립니다.
+  - `load`는 1.6.0에서 `'eager'`만 받습니다. 나중에 섹션을 늦게 불러올 자리입니다.
+- 지금 순서: 방문자 `markdown` 10 → `code-copy` 20 → `video-render` 30 → `sns-embed` 40 → `link-card` 50,
+  편집기 `video-upload` 10 → `image-paste` 20 → `upload-guards` 30. `editor-style`은 `boot`·`editorEnd`,
+  `code-format`은 `install`을 씁니다. 다른 섹션의 결과를 읽는 섹션은 그보다 큰 순서 값을 씁니다.
+- 스케줄러(`08-scheduler.js`)가 유일한 MutationObserver(`document.body`, `childList` + `subtree`)를 가집니다.
+  `.ck-content`이거나 그 안이거나 그것을 품은 노드가 추가되면 방문자 스캔을 200ms 뒤로 요청하고, 그런 변경마다 다시 잡습니다.
+  모든 변경은 편집기 스캔을 250ms 뒤로 요청합니다(대기 중에는 새 요청을 버리는 고정 창).
+  부팅 때는 애니메이션 프레임 두 번 뒤, 그리고 400ms·900ms에 두 스캔을 돕니다. 섹션은 감시기나 스캔 타이머를 따로 만들지 않습니다.
+- 안전장치 규칙: 훅이 예외를 내면 그 섹션만 건너뛰고 `warnOnce(tag, reason)`가 `console.warn`을 한 번 남기며,
+  나머지는 계속 돕니다. 편집기에 개입하는 섹션은 구조가 예상과 다르면 아무것도 하지 않고 에디터를 원래대로 둡니다.
+
+#### 기능 섹션 추가 절차
+
+1. 섹션 대역(10~79)에서 빈 번호를 골라 `resources/js/src/NN-<이름>.js`를 만듭니다. 파일 전체를
+   `(function (core) { 'use strict'; … })(core);`로 감싸고 끝에서 `core.section({ … })`을 한 번 부릅니다.
+   감싼 범위 밖에 최상위 이름을 만들지 않고, 다른 조각과 나눌 것은 `core.ns('<기능>')`로만 주고받습니다.
+   (1.6.0 이전에 만든 섹션은 아직 감싸지 않았습니다. 필요할 때 섹션 단위로 감쌉니다.)
+2. 등록 항목을 채웁니다: `name`, `scope`, `order`·`editorOrder`, `load: 'eager'`, 켜고 끄는 설정이 있으면 `gate`·`enabled`,
+   `styles`(만드는 `<style>` id), 필요한 훅.
+3. 도우미는 새로 만들지 말고 코어의 것(`readSettings`·`t`·`esc`·`warnOnce`·`isEditingArea`·`editorInstanceNear` 등)을 씁니다.
+   MutationObserver나 스캔 타이머를 새로 만들지 않습니다.
+4. 설정이 있으면 여덟 곳을 모두 고칩니다.
+   1. `plugin.php` `getSettingsSchema()`(형식·기본값·라벨)
+   2. `plugin.php` `getConfigValues()` 기본값
+   3. `config/settings/defaults.json` `defaults`
+   4. `config/settings/defaults.json` `frontend_schema`(스크립트가 읽는 값은 `expose: true`)
+   5. `resources/layouts/admin/plugin_settings.json` 탭 버튼
+   6. `resources/layouts/admin/plugin_settings.json` 탭 패널(입력 칸·도움말)
+   7. `resources/layouts/admin/plugin_settings.json` 폼 `schema`
+   8. `resources/lang/ko.json`·`resources/lang/en.json` 키(탭·입력 칸·도움말)
+
+   그다음 `readSettings()`(`01-settings.js`)에서 새 키를 읽습니다.
+5. `scripts/build-js.sh`, `scripts/build-js.sh --check`를 돌리고, 조각과 빌드된 두 파일을 함께 커밋합니다.
+6. 위 순서 목록, 기능 목록, CHANGELOG에 섹션을 적습니다.
 
 ## Acknowledgments
 

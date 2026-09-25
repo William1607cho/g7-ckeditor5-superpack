@@ -20,7 +20,7 @@
       + '<span class="ck5sp-vbar__prog"><span></span></span>'
       + '<span class="ck5sp-vbar__msg"></span>'
       + '<input type="file" accept="' + accept + '" hidden>';
-    container.parentNode.insertBefore(bar, container);
+    try { container.parentNode.insertBefore(bar, container); } catch (e) { warnOnce('video upload bar', e); return; }
 
     var btn = bar.querySelector('.ck5sp-vbar__btn');
     var input = bar.querySelector('input[type=file]');
@@ -34,7 +34,7 @@
     lib.hidden = true;
     lib.innerHTML = '<div class="ck5sp-vlib__head">' + esc(t('editor.video.library', '동영상 라이브러리')) + '</div><div class="ck5sp-vlib__list"></div>';
     var libList = lib.querySelector('.ck5sp-vlib__list');
-    container.parentNode.insertBefore(lib, container);
+    try { container.parentNode.insertBefore(lib, container); } catch (e) { warnOnce('video upload bar', e); return; }
 
     var libIndex = {}; // videoId -> card element
 
@@ -106,10 +106,9 @@
         if (ids.indexOf(id) === -1 && !libIndex[id]) ids.push(id);
       }
       if (!ids.length) return;
-      var token = authToken();
       fetch(VIDEO_META, {
         method: 'POST',
-        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, authHeaders()),
         body: JSON.stringify({ ids: ids })
       })
         .then(function (r) { return r.ok ? r.json() : []; })
@@ -166,4 +165,13 @@
         });
     });
   }
+
+  core.section({
+    name: 'video-upload',
+    scope: 'editor',
+    editorOrder: 10,
+    load: 'eager',
+    styles: [UPLOAD_STYLE_ID],
+    editor: attachUploaderTo
+  });
 

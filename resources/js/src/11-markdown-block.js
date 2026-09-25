@@ -1,5 +1,14 @@
+  /**
+   * `.ck-content` 안의 마크다운 문법을 실제 서식으로 바꾼다 (방문자 화면 전용 — 편집기
+   * editable 에서는 실행 안 함). 다른 승격 패스보다 먼저 돌아 링크가 `<a>` 가 된 뒤
+   * SNS/OG 카드 로직이 걸리게 한다.
+   *
+   * 오탐 방지: 블록 변환은 **줄 전체가 문법에 정확히 맞고**(공백 필수), 그 `<p>` 에 자식
+   * 엘리먼트가 없을 때만. 목록·순서목록은 **2줄 이상 연속**일 때만(단일 "- 문장" 무시).
+   * 기울임(`*x*`)은 기본 꺼짐. 사용자가 에디터 버튼으로 서식을 준 문단은 인라인 변환 스킵.
+   */
   function renderMarkdown(scope, cfg) {
-    if (scope.closest('.ck-editor__editable, .ck-editor')) return; // 편집 중에는 변환 안 함
+    if (isEditingArea(scope)) return; // 편집 중에는 변환 안 함
 
     // 블록 패스 + 인라인 패스 모두 멱등(변환 요소에 data-ck5-md* 마커). 스캔마다 다시 돌아도
     // 이미 변환된 건 건너뛰므로, 콘텐츠가 뒤늦게/다시 렌더돼도 스스로 따라잡는다.
@@ -196,4 +205,16 @@
       mdApplyInline(ie, cfg);
     }
   }
+
+  // 다른 승격 패스보다 먼저 돌아 링크가 <a> 가 된 뒤 SNS/카드 패스가 걸리게 한다(order 10 = 맨 앞).
+  core.section({
+    name: 'markdown',
+    scope: 'visitor',
+    order: 10,
+    load: 'eager',
+    gate: function (cfg) { return cfg.mdEnabled; },
+    enabled: function (cfg) { return cfg.mdEnabled; },
+    styles: [MD_STYLE_ID],
+    visitor: renderMarkdown
+  });
 

@@ -2,26 +2,9 @@
    *  링크 카드
    * ================================================================ */
 
-  function isBareUrlLink(a) {
-    var href = a.getAttribute('href') || '';
-    if (!/^https?:\/\//i.test(href)) return false;
-    var text = (a.textContent || '').trim();
-    if (!/^https?:\/\//i.test(text)) return false;
-    var norm = function (u) { return u.replace(/\/+$/, '').toLowerCase(); };
-    return norm(text) === norm(href);
-  }
-
-  /** block(주로 <p>)의 유일한 의미 있는 자식이 맨URL 링크면 그 링크를 반환 */
-  function soleLinkOf(block) {
-    if ((block.textContent || '').trim() === '') return null;
-    var els = [];
-    for (var i = 0; i < block.children.length; i++) els.push(block.children[i]);
-    if (els.length !== 1) return null;
-    var only = els[0];
-    if (only.tagName !== 'A') return null;
-    if ((block.textContent || '').trim() !== (only.textContent || '').trim()) return null;
-    return isBareUrlLink(only) ? only : null;
-  }
+  var API = '/api/plugins/' + IDENTIFIER + '/link-preview';
+  var LINKCARD_STYLE_ID = 'ck5-linkcard-style';
+  var MAX_INFLIGHT = 3;
 
   function cardHtml(url, p, cfg) {
     var title = (p.title || p.domain || url).trim();
@@ -212,4 +195,54 @@
     el.textContent = css;
     document.head.appendChild(el);
   }
+
+  /** 방문자 패스: 단독 일반 링크와 임베드 패스의 미지원 폴백 래퍼를 링크 카드로 바꾼다(SNS 패스 뒤). */
+  function linkCardVisitor(scope, cfg, ctx) {
+    var cardTargets = [];
+
+    // 2a. 본문 단독 일반 링크 (SNS 아님)
+    var lcBlocks = scope.querySelectorAll('p, div');
+    for (var k = 0; k < lcBlocks.length; k++) {
+      var lb = lcBlocks[k];
+      if (lb.dataset.ck5Lc) continue;
+      if (lb.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
+      var la = soleLinkOf(lb);
+      if (!la) continue;
+      if (detectPlatform(la.href) !== 'unknown') continue; // SNS 는 임베드 패스 소관
+      lb.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: la.href, replace: lb, kind: 'link' });
+    }
+
+    // 2b. 임베드 패스가 만든 미지원 폴백 래퍼 (레거시 <oembed> unknown 등)
+    var fbs = scope.querySelectorAll('.' + EMBED_WRAPPER_CLASS + '[data-ck5-embed-platform="unknown"]');
+    for (var f = 0; f < fbs.length; f++) {
+      var wrap = fbs[f];
+      if (wrap.dataset.ck5Lc) continue;
+      var fbLink = wrap.querySelector('a[href^="http"]');
+      if (!fbLink) continue;
+      wrap.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: fbLink.href, replace: wrap, kind: 'fallback' });
+    }
+
+    if (cardTargets.length) {
+      ctx.once('card', function () { injectLinkCardStyle(cfg); });
+      cardTargets.forEach(function (tt) {
+        getPreview(tt.url).then(function (p) {
+          if (!tt.replace.isConnected) return;
+          applyCard(tt.replace, tt.url, p, tt.kind, cfg);
+        });
+      });
+    }
+  }
+
+  core.section({
+    name: 'link-card',
+    scope: 'visitor',
+    order: 50,
+    load: 'eager',
+    gate: function (cfg) { return cfg.linkcardEnabled; },
+    enabled: function (cfg) { return cfg.linkcardEnabled; },
+    styles: [LINKCARD_STYLE_ID],
+    visitor: linkCardVisitor
+  });
 

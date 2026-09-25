@@ -1,20 +1,32 @@
 /**
- * g7-ckeditor5-superpack — 프론트 렌더 엔트리 (global 전략, 전 페이지 로드)
+ * g7-ckeditor5-superpack — 프론트 스크립트 (global 전략, 전 페이지 로드)
  *
- * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 본문에는 링크가 순수 `<a href>` 로만 저장된다.
- * 이 스크립트가 방문자 화면에서 `.ck-content` 를 스캔해:
+ * CKEditor 5(`sirsoft-ckeditor5`)로 쓴 본문은 순수 HTML(`<a href>`·`<pre>`·마크다운 글자)로 저장된다.
+ * 이 스크립트는 저장 데이터를 바꾸지 않고 화면에서만 다음을 한다.
  *
- *  1. 단독으로 놓인 SNS 링크(YouTube·X·Instagram·TikTok)를 각 플랫폼 임베드로 치환
- *  2. 그 밖의 단독 외부 링크를 서버 프리뷰 API 로 조회해 OG 카드 / 최소 카드로 치환
+ *  방문자 화면(`.ck-content`, 편집 영역 제외)
+ *   - 마크다운 문법을 서식으로 변환(제목·목록·인용·표·구분선·코드·링크·굵게·기울임)
+ *   - 코드 블록에 복사 버튼
+ *   - 이 플러그인 동영상 링크를 `<video>` 플레이어로
+ *   - 단독 SNS 링크(YouTube·X·Instagram·TikTok)를 임베드로
+ *   - 그 밖의 단독 외부 링크를 서버 프리뷰 API 로 OG 카드 / 최소 카드로
+ *  글쓰기 화면(게시글 본문 에디터)
+ *   - 동영상 업로드 바·라이브러리, 클립보드 이미지 붙여넣기와 업로드 보호(제출 대기·시간 초과)
+ *   - 에디터 스타일(글자 크기·줄 간격 표식), 코드·코드 블록 버튼(`ClassicEditor.create` 감싸기)
+ *   - 저장된 코드 표시 스타일(툴바 코드·마크다운 코드 같은 모양)
  *
- * 설정은 `window.G7Config.plugins['g7-ckeditor5-superpack']` (관리자 설정의 frontend_schema
- * 노출분)에서 읽는다. 기능이 꺼져 있으면 해당 스캔을 건너뛴다.
+ * 설정은 `window.G7Config.plugins['g7-ckeditor5-superpack']`(관리자 설정의 frontend_schema
+ * 노출분)에서 읽는다. 기능이 꺼져 있으면 해당 처리를 건너뛴다.
+ *
+ * 구조(1.6.0): 이 파일(00)이 IIFE 를 열고 `99-tail.js` 가 닫는다. `01~09` 코어(설정·번역·
+ * 유틸·영역·섹션 등록부·스케줄러), `10~79` 기능 섹션(각 조각 끝에서 `core.section()` 으로 등록),
+ * `90` 부팅. 감시기 하나가 방문자 스캔(200ms 트레일링)·편집기 스캔(250ms 고정 창)을 요청한다.
  *
  * 설계 원칙:
- *  - **CKEditor 본체를 건드리지 않는다** — 저장 데이터는 `<a href>` 뿐. 임베드/카드는 화면에서만.
- *  - **멱등** — 대상 노드를 교체하며 처리표시를 남겨 재실행해도 중복 생성이 없다.
- *  - **조용히 깨지지 않는다** — 임베드는 하단에 항상 원문 링크 버튼을 남기고, 카드화 실패 시
- *    원본 링크를 그대로 둔다(긴 URL 은 CSS 로 자동 줄바꿈).
+ *  - **CKEditor 본체를 건드리지 않는다** — 저장 데이터는 그대로. 임베드·카드·서식은 화면에서만.
+ *  - **멱등** — 처리 표시를 남겨 다시 돌아도 중복 생성이 없다.
+ *  - **조용히 깨지지 않는다** — 임베드는 원문 링크 버튼을 남기고, 카드화 실패 시 원본 링크를 둔다.
+ *    한 기능이 예외를 내면 그 기능만 건너뛰고 경고를 한 번 남긴다(`warnOnce`).
  *  - **SPA 대응** — DOMContentLoaded + rAF + 지연 재시도 + body MutationObserver.
  *
  * (레거시: `sirsoft-ckeditor5` 다운스트림 포크가 previewsInData:false 로 저장하던
@@ -24,12 +36,6 @@
   'use strict';
 
   var IDENTIFIER = 'g7-ckeditor5-superpack';
-  var API = '/api/plugins/' + IDENTIFIER + '/link-preview';
-
-  var EMBED_WRAPPER_CLASS = 'ck5-media-embed';
-  var EMBED_STYLE_ID = 'ck5-media-embed-style';
-  var LINKCARD_STYLE_ID = 'ck5-linkcard-style';
-  var MAX_INFLIGHT = 3;
 
   var logger = (window.G7Core && window.G7Core.createLogger && window.G7Core.createLogger('Plugin:' + IDENTIFIER)) || {
     log: function () {},
@@ -98,33 +104,10 @@
     return allowed.indexOf(v) !== -1 ? v : fallback;
   }
 
-  /** 설정에 따른 허용 동영상 확장자 목록 (소문자, .mp4 항상 포함) */
-  function allowedVideoExts(cfg) {
-    var e = ['mp4'];
-    if (cfg.videoAllowMov) e.push('mov');
-    if (cfg.videoAllowWebm) e.push('webm');
-    if (cfg.videoAllowM4v) e.push('m4v');
-    return e;
-  }
-
-  /** 플랫폼별 렌더 허용 여부 (플랫폼 마스터 토글 && 개별 토글) */
-  function platformEnabled(cfg, platform) {
-    if (!cfg.snsEnabled) return false;
-    switch (platform) {
-      case 'youtube': return cfg.snsYoutube;
-      case 'twitter': return cfg.snsTwitter;
-      case 'instagram': return cfg.snsInstagram;
-      case 'tiktok': return cfg.snsTiktok;
-      default: return false;
-    }
-  }
-
-  /* ================================================================ *
-   *  공통 유틸
-   * ================================================================ */
-
-  function esc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  /** 설정 `codeformat_enabled`(기본 켜짐)를 에디터 생성 시점에 읽는다. */
+  function codeFormatEnabled() {
+    var s = (window.G7Config && window.G7Config.plugins && window.G7Config.plugins[IDENTIFIER]) || {};
+    return asBool(s.codeformat_enabled, true);
   }
 
   function t(key, fallback) {
@@ -135,14 +118,667 @@
     return (typeof r === 'string' && r !== full) ? r : fallback;
   }
 
+  /* ================================================================ *
+   *  공통 유틸
+   * ================================================================ */
+
+  var EMBED_WRAPPER_CLASS = 'ck5-media-embed';
+  // public_id 만 잡으면 되므로 상대/절대 URL 모두 매칭. 링크 텍스트는 상관 안 함.
+  var VIDEO_URL_RE = /\/api\/plugins\/g7-ckeditor5-superpack\/video\/([a-f0-9]{32})\b/i;
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function authToken() {
+    try {
+      if (window.G7Core && window.G7Core.apiClient && window.G7Core.apiClient.getToken) {
+        return window.G7Core.apiClient.getToken() || '';
+      }
+    } catch (e) {}
+    try { return localStorage.getItem('auth_token') || ''; } catch (e) { return ''; }
+  }
+
+  function isBareUrlLink(a) {
+    var href = a.getAttribute('href') || '';
+    if (!/^https?:\/\//i.test(href)) return false;
+    var text = (a.textContent || '').trim();
+    if (!/^https?:\/\//i.test(text)) return false;
+    var norm = function (u) { return u.replace(/\/+$/, '').toLowerCase(); };
+    return norm(text) === norm(href);
+  }
+
+  /** block(주로 <p>)의 유일한 의미 있는 자식이 맨URL 링크면 그 링크를 반환 */
+  function soleLinkOf(block) {
+    if ((block.textContent || '').trim() === '') return null;
+    var els = [];
+    for (var i = 0; i < block.children.length; i++) els.push(block.children[i]);
+    if (els.length !== 1) return null;
+    var only = els[0];
+    if (only.tagName !== 'A') return null;
+    if ((block.textContent || '').trim() !== (only.textContent || '').trim()) return null;
+    return isBareUrlLink(only) ? only : null;
+  }
+
+  var warnedTags = {}; // warnOnce 가 이미 알린 대상
+
+  /** 안전장치 공통: 예외로 건너뛴 대상(tag)을 console.warn 으로 한 번만 알린다(09a 방식, console.error 는 쓰지 않는다). */
+  function warnOnce(tag, reason) {
+    if (warnedTags[tag]) return;
+    warnedTags[tag] = true;
+    try { console.warn('[' + IDENTIFIER + '] ' + tag + ' skipped: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
+  }
+
   /** el 이 CKEditor 편집 영역(본문·댓글 편집기) 안이면 true. 편집 영역도 `.ck-content` 라 방문자 스캔에서 뺄 때 쓴다. */
   function isEditingArea(el) {
     return !!(el && el.closest && el.closest('.ck-editor__editable, .ck-editor'));
   }
 
+  /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
+  function editorInstanceNear(container) {
+    var scopes = [container, container.parentElement, container.nextElementSibling];
+    for (var i = 0; i < scopes.length; i++) {
+      var sc = scopes[i];
+      if (!sc || !sc.querySelectorAll) continue;
+      var eds = sc.querySelectorAll('.ck-editor__editable_inline, .ck-editor__editable');
+      for (var j = 0; j < eds.length; j++) {
+        if (eds[j].ckeditorInstance) return eds[j].ckeditorInstance;
+      }
+    }
+    return null;
+  }
+
+  function scanEditors() {
+    // 동영상 업로드 바/이미지 복붙 둘 다 켜짐 여부를 각자 내부에서
+    // 확인하므로(attachUploaderTo, attachPasteImageHandlerTo) 여기선 컨테이너 존재만
+    // 확인한다. (이전엔 `if (!cfg.videoEnabled) return;` 로 videoEnabled 가
+    // 꺼지면 이 순회 자체를 건너뛰었는데, 그러면 videoEnabled 와 무관한 다른
+    // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
+    // 확인하는 현재 구조가 버그 없이 이미 검증됨, 원복하지 않고 유지)
+    var containers = document.querySelectorAll('.ckeditor5-wrapper, [id^="ckeditor5-"]');
+    for (var i = 0; i < containers.length; i++) {
+      // 에디터가 실제로 붙었는지 확인 (editable 존재)
+      var cont = containers[i];
+      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
+      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
+      if (!editorInstanceNear(cont)) continue;
+      runEditors(cont);
+    }
+    // 편집 스타일 표식은 위 컨테이너 목록과 무관하게 고정 구조로 찾는다.
+    runEditorEnds();
+  }
+
+  /* ================================================================ *
+   *  섹션 등록부 · 방문자 패스
+   * ================================================================ *
+   *  기능 섹션은 번들 평가 때 자기 조각 끝에서 `core.section(spec)` 으로 등록한다.
+   *  등록부는 이 IIFE 안에만 있고 window 에 올리지 않는다.
+   *  - 방문자 패스는 `order` 오름차순(같은 값은 등록 순)으로 섹션을 부른다. 결합 순서에 기대지 않는다.
+   *  - `gate(cfg)` 가 있는 섹션 중 하나라도 참이어야 `.ck-content` 를 돈다. 모두 거짓이면
+   *    게이트 없는 섹션만 root 에 한 번 부른다(1.5.0 scan 의 조기 반환과 같다).
+   *  - 편집기 패스는 `editorOrder` 오름차순으로 컨테이너마다 `editor(container)` 를, 스캔 끝에
+   *    `editorEnd()` 를 부른다. `boot(cfg)` 는 부팅 run() 첫머리에서 한 번.
+   *  - `install()` 은 등록 직후 그 자리에서 바로 부른다(= 번들 평가 중 그 조각의 위치).
+   *  - 받기만 하고 아직 부르지 않는 항목: settings·guard.
+   *  - `load` 는 'eager' 만 받는다(지연 로드는 자리만 둔다).
+   */
+
+  var sections = []; // 등록된 섹션 spec — 방문자 order 오름차순, order 없는 섹션은 뒤
+  var editorSections = []; // 편집기 섹션 spec — editorOrder 오름차순, editorOrder 없는 섹션은 뒤
+  var namespaces = {};
+
+  var core = {
+    id: IDENTIFIER,
+    section: registerSection,
+    ns: function (name) { return namespaces[name] || (namespaces[name] = {}); }
+  };
+
+  function isVisitorSection(spec) {
+    return spec.scope === 'visitor' || spec.scope === 'both';
+  }
+
+  function visitorOrderOf(spec) {
+    return isVisitorSection(spec) ? spec.order : Infinity;
+  }
+
+  function isEditorSection(spec) {
+    return spec.scope === 'editor' || spec.scope === 'both';
+  }
+
+  function editorOrderOf(spec) {
+    return spec.editor ? spec.editorOrder : Infinity;
+  }
+
+  function registerSection(spec) {
+    if (!spec || typeof spec.name !== 'string' || !spec.name) { logger.warn('section: name is required'); return; }
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].name === spec.name) { logger.warn('section: duplicate name ' + spec.name); return; }
+    }
+    if (spec.load !== undefined && spec.load !== 'eager') { logger.warn('section: only eager load is supported: ' + spec.name); return; }
+    if (isVisitorSection(spec) && typeof spec.order !== 'number') { logger.warn('section: visitor order is required: ' + spec.name); return; }
+    if (isEditorSection(spec) && spec.editor && typeof spec.editorOrder !== 'number') { logger.warn('section: editor order is required: ' + spec.name); return; }
+    var at = sections.length;
+    while (at > 0 && visitorOrderOf(sections[at - 1]) > visitorOrderOf(spec)) at--;
+    sections.splice(at, 0, spec);
+    if (isEditorSection(spec)) {
+      var ea = editorSections.length;
+      while (ea > 0 && editorOrderOf(editorSections[ea - 1]) > editorOrderOf(spec)) ea--;
+      editorSections.splice(ea, 0, spec);
+    }
+    if (spec.install) spec.install();
+  }
+
+  /** 방문자 스캔 한 번 동안 섹션끼리 나누는 표시. once 는 1.5.0 의 `if (!didX) { …; didX = true; }` 와 같다. */
+  function newVisitorContext() {
+    var flags = {};
+    return {
+      once: function (key, fn) {
+        if (flags[key]) return;
+        fn();
+        flags[key] = true;
+      },
+      has: function (key) { return !!flags[key]; }
+    };
+  }
+
+  /** 게이트가 있는 방문자 섹션 중 하나라도 켜져 있으면 true */
+  function visitorGateOpen(cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (isVisitorSection(s) && typeof s.gate === 'function' && s.gate(cfg)) return true;
+    }
+    return false;
+  }
+
+  /** 게이트가 닫혔을 때: 게이트 없는 방문자 섹션만 root 에 한 번씩 */
+  function runGateClosedVisitors(root, cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (isVisitorSection(s) && typeof s.gate !== 'function' && s.visitor) s.visitor(root, cfg, null);
+    }
+  }
+
+  /** `.ck-content` 하나(편집 영역 제외)에 켜진 방문자 섹션을 order 순으로 */
+  function runVisitors(scope, cfg, ctx) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (!isVisitorSection(s) || !s.visitor) continue;
+      if (s.enabled && !s.enabled(cfg)) continue;
+      try { s.visitor(scope, cfg, ctx); } catch (e) { warnOnce('section ' + s.name + ' (visitor)', e); }
+    }
+  }
+
+  /** 방문자 스캔 한 번이 끝난 뒤 */
+  function runVisitorEnds(ctx, cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (isVisitorSection(s) && s.visitorEnd) s.visitorEnd(ctx, cfg);
+    }
+  }
+
+  /** 부팅(run() 첫머리) 때 한 번 */
+  function runBoots(cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].boot) sections[i].boot(cfg);
+    }
+  }
+
+  /** 편집기 컨테이너 하나(편집기 인스턴스 확인 뒤)에 편집기 섹션을 editorOrder 순으로 */
+  function runEditors(container) {
+    for (var i = 0; i < editorSections.length; i++) {
+      if (editorSections[i].editor) { try { editorSections[i].editor(container); } catch (e) { warnOnce('section ' + editorSections[i].name + ' (editor)', e); } }
+    }
+  }
+
+  /** 편집기 스캔 한 번이 끝난 뒤(컨테이너 목록과 무관) */
+  function runEditorEnds() {
+    for (var i = 0; i < editorSections.length; i++) {
+      if (editorSections[i].editorEnd) editorSections[i].editorEnd();
+    }
+  }
+
+  /* ================================================================ *
+   *  통합 스캔
+   * ================================================================ */
+
+  // 방문자 처리는 등록된 섹션을 order 순으로 부른다(06-registry). 섹션 순서: 마크다운 10 → 코드 복사 20
+  // → 동영상 30 → SNS 40 → 링크 카드 50.
+  function scan(root) {
+    root = root || document;
+    var cfg = readSettings();
+    if (!visitorGateOpen(cfg)) { runGateClosedVisitors(root, cfg); return; }
+
+    var contents;
+    try { contents = root.querySelectorAll('.ck-content'); } catch (e) { return; }
+    if (!contents.length && root !== document) return;
+    if (!contents.length) contents = document.querySelectorAll('.ck-content');
+    if (!contents.length) return;
+
+    var ctx = newVisitorContext();
+
+    for (var c = 0; c < contents.length; c++) {
+      var scope = contents[c];
+      if (isEditingArea(scope)) continue; // 편집 영역은 방문자 변환 대상이 아니다
+      runVisitors(scope, cfg, ctx);
+    }
+
+    runVisitorEnds(ctx, cfg);
+  }
+
+  /* ================================================================ *
+   *  관찰자 · 부팅
+   * ================================================================ */
+
+  // 스케줄러: 감시기 하나가 방문자·편집기 스캔 요청을 낸다. 두 요청의 타이머는 따로 둔다
+  // (방문자 200ms 트레일링, 편집기 250ms 고정 창). 해제는 하지 않는다(페이지 수명).
+  var observer = null;
+  var rescanTimer = null;
+  var editorScanTimer = null;
+
+  /** 추가된 요소 중 .ck-content 이거나 그 안이거나 그것을 품은 것이 있으면 true(방문자 스캔 조건) */
+  function hasContentAddition(records) {
+    return records.some(function (r) {
+      return Array.prototype.some.call(r.addedNodes, function (n) {
+        return n.nodeType === 1
+          && ((n.matches && (n.matches('.ck-content') || n.matches('.ck-content *')))
+            || (n.querySelector && n.querySelector('.ck-content')));
+      });
+    });
+  }
+
+  /** 방문자 스캔 요청 */
+  function requestVisitorScan() {
+    // 트레일링 디바운스 — 대기 중이어도 타이머를 새로 잡는다. (기존엔 rescanTimer!==null 이면
+    // 이벤트를 버려서, 콘텐츠가 두 번에 나눠 들어오면 뒤엣것을 놓쳤다.) scan() 은 멱등이라
+    // 자기 변경으로 옵저버가 한 번 더 울려도 no-op 스캔 1회 후 멎는다.
+    if (rescanTimer !== null) window.clearTimeout(rescanTimer);
+    rescanTimer = window.setTimeout(function () {
+      rescanTimer = null;
+      scan(document);
+    }, 200);
+  }
+
+  /** 편집기 스캔 요청: 첫 요청 기준 고정 창(대기 중이면 버린다) */
+  function requestEditorScan() {
+    if (editorScanTimer !== null) return;
+    editorScanTimer = window.setTimeout(function () { editorScanTimer = null; scanEditors(); }, 250);
+  }
+
+  /** 방문자 스캔 뒤 편집기 스캔, 같은 자리에서 동기로 */
+  function kick() {
+    scan(document);
+    scanEditors();
+  }
+
+  function ensureObserver() {
+    if (observer || typeof MutationObserver === 'undefined') return;
+    observer = new MutationObserver(function (records) {
+      // 같은 변경 묶음에서 방문자 요청(조건부)이 먼저, 편집기 요청(무조건)이 그다음.
+      // 방문자 판정이 실패해도 편집기 요청은 막지 않는다.
+      var hit = false;
+      try { hit = hasContentAddition(records); } catch (e) { warnOnce('scan observer', e); }
+      if (hit) requestVisitorScan();
+      requestEditorScan();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function run() {
+    runBoots(readSettings());
+    ensureObserver();
+    if (window.requestAnimationFrame) {
+      requestAnimationFrame(function () { requestAnimationFrame(kick); });
+    } else {
+      kick();
+    }
+    window.setTimeout(kick, 400);
+    window.setTimeout(kick, 900);
+  }
+
+  /* ================================================================ *
+   *  마크다운 문법 → 서식 (렌더 시점 변환)
+   * ================================================================ */
+
+  var MD_STYLE_ID = 'ck5-md-style';
+
+  function injectMarkdownStyle() {
+    if (document.getElementById(MD_STYLE_ID)) return;
+    var el = document.createElement('style');
+    el.id = MD_STYLE_ID;
+    /* 방문자 화면(HtmlContent)은 Tailwind Preflight 가 h1~h6 를 font-size/weight:inherit 로,
+       ul/ol 를 list-style:none;padding:0 으로 리셋한다. 이 사이트엔 @tailwindcss/typography
+       (`prose`) base 가 로드돼 있지 않아 `prose-h3:text-lg` 같은 유틸도 무효 → 우리가 만든
+       <h3>/<ul> 등이 본문 텍스트와 똑같이 보인다. blockquote/code 처럼 생성 요소를 직접 스타일한다.
+       (레이어 없는 <style> 이라 @layer base 인 Preflight 보다 캐스케이드 우선.) */
+    el.textContent = ''
+      + '.ck-content blockquote[data-ck5-md]{border-left:3px solid #cbd5e1;padding-left:.9em;color:#475569;margin:.8em 0;}'
+      + 'html.dark .ck-content blockquote[data-ck5-md]{border-color:#475569;color:#94a3b8;}'
+      + '.ck-content h1[data-ck5-md]{font-size:1.8em;font-weight:700;line-height:1.25;margin:.9em 0 .45em;}'
+      + '.ck-content h2[data-ck5-md]{font-size:1.5em;font-weight:700;line-height:1.3;margin:.85em 0 .4em;}'
+      + '.ck-content h3[data-ck5-md]{font-size:1.25em;font-weight:700;line-height:1.35;margin:.75em 0 .35em;}'
+      + '.ck-content ul[data-ck5-md]{list-style:disc outside;padding-left:1.7em;margin:.6em 0;}'
+      + '.ck-content ol[data-ck5-md]{list-style:decimal outside;padding-left:1.9em;margin:.6em 0;}'
+      + '.ck-content ul[data-ck5-md]>li, .ck-content ol[data-ck5-md]>li{display:list-item;margin:.2em 0;}'
+      + '.ck-content [data-ck5-md-inline] strong, .ck-content [data-ck5-md] strong{font-weight:700;}'
+      + '.ck-content [data-ck5-md-inline] em, .ck-content [data-ck5-md] em{font-style:italic;}'
+      + '.ck-content a[data-ck5-mda]{color:#2563eb;text-decoration:underline;}'
+      + 'html.dark .ck-content a[data-ck5-mda]{color:#60a5fa;}'
+      /* 표·구분선: CKEditor 5 content styles(표/HorizontalLine) 값에 맞춤. 열이 많은 표는 가로 스크롤. */
+      + '.ck-content figure.table[data-ck5-md]{display:block;overflow-x:auto;margin:.9em 0;}'
+      + '.ck-content figure.table[data-ck5-md]>table{border-collapse:collapse;border-spacing:0;width:100%;border:1px double #b3b3b3;}'
+      + '.ck-content figure.table[data-ck5-md] th, .ck-content figure.table[data-ck5-md] td{min-width:2em;padding:.4em;border:1px solid #bfbfbf;text-align:left;vertical-align:top;}'
+      + '.ck-content figure.table[data-ck5-md] th{font-weight:700;background:rgba(0,0,0,.05);}'
+      + 'html.dark .ck-content figure.table[data-ck5-md]>table, html.dark .ck-content figure.table[data-ck5-md] th, html.dark .ck-content figure.table[data-ck5-md] td{border-color:#475569;}'
+      + 'html.dark .ck-content figure.table[data-ck5-md] th{background:rgba(255,255,255,.06);}'
+      + '.ck-content hr[data-ck5-md]{margin:15px 0;height:4px;background:#dedede;border:0;}'
+      + 'html.dark .ck-content hr[data-ck5-md]{background:#475569;}';
+    document.head.appendChild(el);
+  }
+
+  function mdEsc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /** 한 텍스트 조각에 인라인 마크다운 적용 → HTML 문자열 (입력은 먼저 escape). */
+  function mdInline(str, cfg) {
+    var out = mdEsc(str);
+    var stash = [];
+    var keep = function (html) { stash.push(html); return '\u0001' + (stash.length - 1) + '\u0001'; };
+    if (cfg.mdCode) {
+      out = out.replace(/`([^`\n]+?)`/g, function (_, c) { return keep('<code data-ck5-mdc="1">' + c + '</code>'); });
+    }
+    if (cfg.mdLink) {
+      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, label, u) {
+        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
+      });
+    }
+    if (cfg.mdBold) {
+      out = out.replace(/\*\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*\*/g, '<strong>$1</strong>');
+    }
+    if (cfg.mdItalic) {
+      out = out.replace(/(^|[^*\w])\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*(?!\*)/g, '$1<em>$2</em>');
+    }
+    out = out.replace(/\u0001(\d+)\u0001/g, function (_, i) { return stash[+i]; });
+    return out;
+  }
+
+  /** el 의 텍스트 노드들에 인라인 마크다운 적용 (사용자가 이미 서식 준 요소는 스킵). */
+  function mdApplyInline(el, cfg) {
+    if (!el || el.dataset.ck5MdInline === '1') return;
+    if (el.querySelector('a, strong, b, em, i, code, s, u, mark, sub, sup')) { el.dataset.ck5MdInline = '1'; return; }
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var textNodes = [], n;
+    while ((n = walker.nextNode())) {
+      if (n.parentElement && n.parentElement.closest('code, pre, a')) continue;
+      textNodes.push(n);
+    }
+    textNodes.forEach(function (tn) {
+      var raw = tn.nodeValue;
+      if (!/[*`[]/.test(raw)) return;
+      var html = mdInline(raw, cfg);
+      if (html === mdEsc(raw)) return;
+      try {
+        var frag = document.createRange().createContextualFragment(html);
+        tn.parentNode.replaceChild(frag, tn);
+      } catch (e) {}
+    });
+    el.dataset.ck5MdInline = '1';
+  }
+
+  /** 구분선 줄: 같은 기호 3개 이상만(`---`, `***`, `___`), 공백·다른 문자 섞이면 아님. */
+  var MD_HR_RE = /^(?:-{3,}|\*{3,}|_{3,})$/;
+  /** GFM 표 구분 행: `|---|:---:|` 형태, 파이프 필수(파이프 없는 `---` 는 구분선). 정렬 표기는 무시. */
+  var MD_TABLE_DELIM_RE = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
+
+  /** 표 한 행 → 셀 문자열 배열 (양끝 파이프 제거, `\|` 는 셀 안의 문자 `|`). */
+  function mdTableCells(line) {
+    var s = line.trim();
+    if (s.charAt(0) === '|') s = s.slice(1);
+    if (s.slice(-1) === '|' && s.slice(-2) !== '\\|') s = s.slice(0, -1);
+    var cells = [], buf = '';
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === '\\' && s.charAt(i + 1) === '|') { buf += '|'; i++; }
+      else if (ch === '|') { cells.push(buf.trim()); buf = ''; }
+      else buf += ch;
+    }
+    cells.push(buf.trim());
+    return cells;
+  }
+
+  /** header 줄 + 다음 줄이 GFM 표 시작(헤더·구분 행 열 수 일치)이면 열 수, 아니면 0. */
+  function mdTableCols(header, delim) {
+    if (!header || !delim || header.indexOf('|') < 0 || delim.indexOf('|') < 0) return 0;
+    if (!MD_TABLE_DELIM_RE.test(delim)) return 0;
+    var n = mdTableCells(header).length;
+    return n === mdTableCells(delim).length ? n : 0;
+  }
+
+  /**
+   * `.ck-content` 안의 마크다운 문법을 실제 서식으로 바꾼다 (방문자 화면 전용 — 편집기
+   * editable 에서는 실행 안 함). 다른 승격 패스보다 먼저 돌아 링크가 `<a>` 가 된 뒤
+   * SNS/OG 카드 로직이 걸리게 한다.
+   *
+   * 오탐 방지: 블록 변환은 **줄 전체가 문법에 정확히 맞고**(공백 필수), 그 `<p>` 에 자식
+   * 엘리먼트가 없을 때만. 목록·순서목록은 **2줄 이상 연속**일 때만(단일 "- 문장" 무시).
+   * 기울임(`*x*`)은 기본 꺼짐. 사용자가 에디터 버튼으로 서식을 준 문단은 인라인 변환 스킵.
+   */
+  function renderMarkdown(scope, cfg) {
+    if (isEditingArea(scope)) return; // 편집 중에는 변환 안 함
+
+    // 블록 패스 + 인라인 패스 모두 멱등(변환 요소에 data-ck5-md* 마커). 스캔마다 다시 돌아도
+    // 이미 변환된 건 건너뛰므로, 콘텐츠가 뒤늦게/다시 렌더돼도 스스로 따라잡는다.
+    {
+      injectMarkdownStyle();
+
+      // Pasted markdown is often stored by CKEditor as <p>line1<br>line2<br>line3</p>
+      // (soft breaks). The block logic below assumes one line per <p>, so split any
+      // text-plus-<br>-only <p> that contains at least one block-markdown line into
+      // one <p> per <br> segment. Non-markdown multi-line paragraphs are left alone.
+      var BLOCK_MD_RE = /^(?:#{1,3}[ \t]|[-*+][ \t]|\d{1,3}\.[ \t]|>[ \t]?|```)/;
+      var splitTargets = [];
+      for (var si = 0; si < scope.children.length; si++) {
+        var sc = scope.children[si];
+        if (sc.dataset && sc.dataset.ck5Md) continue;
+        if (!/^(P|DIV)$/.test(sc.tagName)) continue;
+        if (sc.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) continue;
+        if (!sc.querySelector('br')) continue;
+        var onlyTextAndBr = true;
+        for (var cn = sc.firstChild; cn; cn = cn.nextSibling) {
+          if (cn.nodeType === 1 && cn.tagName !== 'BR') { onlyTextAndBr = false; break; }
+        }
+        if (onlyTextAndBr) splitTargets.push(sc);
+      }
+      splitTargets.forEach(function (pEl) {
+        var segs = [], buf = '';
+        for (var n = pEl.firstChild; n; n = n.nextSibling) {
+          if (n.nodeType === 1 && n.tagName === 'BR') { segs.push(buf); buf = ''; }
+          else if (n.nodeType === 3) buf += n.nodeValue;
+        }
+        segs.push(buf);
+        var anyMd = segs.some(function (s) { return BLOCK_MD_RE.test((s || '').replace(/ /g, ' ').trim()); });
+        if (!anyMd && (cfg.mdTable || cfg.mdHr)) {
+          var tl = segs.map(function (s) { return (s || '').replace(/ /g, ' ').trim(); });
+          anyMd = tl.some(function (s, ti) {
+            return (cfg.mdHr && MD_HR_RE.test(s)) || (cfg.mdTable && mdTableCols(s, tl[ti + 1]) > 0);
+          });
+        }
+        if (!anyMd) return;
+        var frag = document.createDocumentFragment();
+        segs.forEach(function (s) {
+          var np = document.createElement('p');
+          if ((s || '').replace(/ /g, ' ').trim() === '') np.appendChild(document.createElement('br'));
+          else np.textContent = s;
+          frag.appendChild(np);
+        });
+        pEl.replaceWith(frag);
+      });
+
+      var kids = [];
+      for (var i = 0; i < scope.children.length; i++) {
+        var k = scope.children[i];
+        // 이미 변환된 블록(제목·목록·인용·코드·표·구분선)은 재스캔 때도 kids 에 "경계"로 남긴다.
+        // 빠지면 그 앞뒤 줄이 연속으로 보여, 페이지의 반복 스캔에서 `- a` / `# 제목` / `- b` 가
+        // 한 목록으로 합쳐지고 제목 뒤로 밀린다. 경계는 pure() 가 false 라 어떤 변환 대상도 아니다.
+        if (k.dataset && k.dataset.ck5Md) { kids.push(k); continue; }
+        if (/^(P|DIV)$/.test(k.tagName) && !k.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) kids.push(k);
+      }
+      var lineOf = function (el) {
+        if (el.querySelector('br')) return null; // residual <br> <p> (not a split target) -> hold off block convert
+        return (el.textContent || '').replace(/ /g, ' ').trim();
+      };
+      var pure = function (el) { return !(el.dataset && el.dataset.ck5Md) && !el.querySelector('*'); };
+      var mergeList = function (kids, start, re, strip, tag) {
+        var run = [start], j = start + 1;
+        while (j < kids.length) {
+          var l = lineOf(kids[j]);
+          if (l && re.test(l) && pure(kids[j])) { run.push(j); j++; } else break;
+        }
+        if (run.length < 2) return -1;
+        var list = document.createElement(tag);
+        list.dataset.ck5Md = '1';
+        run.forEach(function (ri) {
+          var li = document.createElement('li');
+          li.textContent = lineOf(kids[ri]).replace(strip, '');
+          list.appendChild(li);
+        });
+        kids[run[0]].replaceWith(list);
+        for (var d = run.length - 1; d >= 1; d--) kids[run[d]].remove();
+        return run[run.length - 1];
+      };
+
+      var p = 0;
+      while (p < kids.length) {
+        var el = kids[p];
+        var line = lineOf(el);
+        if (line === null || line === '' || !pure(el)) { p++; continue; }
+
+        var hm = cfg.mdHeading && line.match(/^(#{1,3})[ \t]+(\S.*)$/);
+        if (hm) {
+          var h = document.createElement('h' + hm[1].length);
+          h.textContent = hm[2];
+          h.dataset.ck5Md = '1';
+          el.replaceWith(h); kids[p] = h; p++; continue;
+        }
+        if (cfg.mdList && /^[-*+][ \t]+\S/.test(line)) {
+          var e1 = mergeList(kids, p, /^[-*+][ \t]+\S/, /^[-*+][ \t]+/, 'ul');
+          if (e1 >= 0) { p = e1 + 1; continue; }
+        }
+        if (cfg.mdList && /^\d{1,3}\.[ \t]+\S/.test(line)) {
+          var e2 = mergeList(kids, p, /^\d{1,3}\.[ \t]+\S/, /^\d{1,3}\.[ \t]+/, 'ol');
+          if (e2 >= 0) { p = e2 + 1; continue; }
+        }
+        if (cfg.mdQuote && /^>[ \t]?/.test(line)) {
+          var qrun = [p], qj = p + 1;
+          while (qj < kids.length) {
+            var q2 = lineOf(kids[qj]);
+            if (q2 !== null && /^>[ \t]?/.test(q2) && pure(kids[qj])) { qrun.push(qj); qj++; } else break;
+          }
+          var bq = document.createElement('blockquote');
+          bq.dataset.ck5Md = '1';
+          qrun.forEach(function (ri, idx) {
+            if (idx) bq.appendChild(document.createElement('br'));
+            bq.appendChild(document.createTextNode(lineOf(kids[ri]).replace(/^>[ \t]?/, '')));
+          });
+          kids[qrun[0]].replaceWith(bq);
+          for (var d3 = qrun.length - 1; d3 >= 1; d3--) kids[qrun[d3]].remove();
+          p = qrun[qrun.length - 1] + 1; continue;
+        }
+        if (cfg.mdCode && /^```/.test(line)) {
+          var end = -1;
+          for (var f = p + 1; f < kids.length; f++) {
+            var fl = lineOf(kids[f]);
+            if (fl !== null && /^```\s*$/.test(fl) && !kids[f].dataset.ck5Md) { end = f; break; }
+          }
+          if (end > p) {
+            var pre = document.createElement('pre');
+            pre.className = 'ck5-md-pre'; pre.dataset.ck5Md = '1';
+            var code = document.createElement('code');
+            var lines = [];
+            for (var g = p + 1; g < end; g++) lines.push(kids[g].textContent || '');
+            code.textContent = lines.join('\n');
+            pre.appendChild(code);
+            kids[p].replaceWith(pre);
+            for (var d4 = end; d4 >= p + 1; d4--) kids[d4].remove();
+            p = end + 1; continue;
+          }
+        }
+        // 표·구분선은 기존 요소 판정이 모두 빗나간 줄에만 적용(기존 변환 결과 불변).
+        if (cfg.mdTable && p + 1 < kids.length && pure(kids[p + 1])) {
+          var cols = mdTableCols(line, lineOf(kids[p + 1]));
+          if (cols > 0) {
+            var rowEnd = p + 2;
+            while (rowEnd < kids.length) {
+              var rl = lineOf(kids[rowEnd]);
+              if (rl && rl.indexOf('|') >= 0 && pure(kids[rowEnd])) rowEnd++; else break;
+            }
+            var fig = document.createElement('figure');
+            fig.className = 'table';
+            fig.dataset.ck5Md = '1';
+            var tbl = document.createElement('table');
+            var addRow = function (parent, text, cellTag) {
+              var tr = document.createElement('tr');
+              var cells = mdTableCells(text);
+              for (var ci = 0; ci < cols; ci++) {
+                var cell = document.createElement(cellTag);
+                cell.innerHTML = mdInline(ci < cells.length ? cells[ci] : '', cfg);
+                cell.dataset.ck5MdInline = '1';
+                tr.appendChild(cell);
+              }
+              parent.appendChild(tr);
+            };
+            var thead = document.createElement('thead');
+            addRow(thead, line, 'th');
+            tbl.appendChild(thead);
+            if (rowEnd > p + 2) {
+              var tbody = document.createElement('tbody');
+              for (var r = p + 2; r < rowEnd; r++) addRow(tbody, lineOf(kids[r]), 'td');
+              tbl.appendChild(tbody);
+            }
+            fig.appendChild(tbl);
+            kids[p].replaceWith(fig);
+            for (var d5 = rowEnd - 1; d5 >= p + 1; d5--) kids[d5].remove();
+            kids.splice(p, rowEnd - p, fig);
+            p++; continue;
+          }
+        }
+        if (cfg.mdHr && MD_HR_RE.test(line)) {
+          // 방문자 화면 전용 렌더라 에디터의 HorizontalLine 로드 여부와 무관하게 <hr>.
+          // 토글이 꺼져 있으면 건드리지 않아 원문 글자(`---`) 그대로 보인다.
+          var hrEl = document.createElement('hr');
+          hrEl.dataset.ck5Md = '1';
+          el.replaceWith(hrEl); kids[p] = hrEl; p++; continue;
+        }
+        p++;
+      }
+    }
+
+    // 인라인 패스
+    var inlineEls = scope.querySelectorAll('p, h1, h2, h3, li, blockquote');
+    for (var m = 0; m < inlineEls.length; m++) {
+      var ie = inlineEls[m];
+      if (ie.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) continue;
+      mdApplyInline(ie, cfg);
+    }
+  }
+
+  // 다른 승격 패스보다 먼저 돌아 링크가 <a> 가 된 뒤 SNS/카드 패스가 걸리게 한다(order 10 = 맨 앞).
+  core.section({
+    name: 'markdown',
+    scope: 'visitor',
+    order: 10,
+    load: 'eager',
+    gate: function (cfg) { return cfg.mdEnabled; },
+    enabled: function (cfg) { return cfg.mdEnabled; },
+    styles: [MD_STYLE_ID],
+    visitor: renderMarkdown
+  });
+
   /* ================================================================ *
    *  SNS 임베드
    * ================================================================ */
+
+  var EMBED_STYLE_ID = 'ck5-media-embed-style';
 
   var LABELS = { youtube: 'YouTube', twitter: 'X', instagram: 'Instagram', tiktok: 'TikTok', unknown: '' };
 
@@ -415,30 +1051,86 @@
     }
   }
 
+  /** 플랫폼별 렌더 허용 여부 (플랫폼 마스터 토글 && 개별 토글) */
+  function platformEnabled(cfg, platform) {
+    if (!cfg.snsEnabled) return false;
+    switch (platform) {
+      case 'youtube': return cfg.snsYoutube;
+      case 'twitter': return cfg.snsTwitter;
+      case 'instagram': return cfg.snsInstagram;
+      case 'tiktok': return cfg.snsTiktok;
+      default: return false;
+    }
+  }
+
+  /* ================================================================ *
+   *  SNS 임베드 — 방문자 패스 · 섹션 등록
+   * ================================================================ */
+
+  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
+
+  /** 방문자 패스: 레거시 <oembed> 와 본문 단독 SNS 링크를 임베드로 바꾼다. */
+  function snsEmbedVisitor(scope, cfg, ctx) {
+    // 1a. 레거시 <oembed url> (previewsInData:false 로 저장됐던 형태)
+    var oembeds = scope.querySelectorAll('oembed[url]');
+    for (var i = 0; i < oembeds.length; i++) {
+      var oe = oembeds[i];
+      var rawOe = (oe.getAttribute('url') || '').trim();
+      var figure = oe.closest('figure.media');
+      var tgt = figure || oe;
+      if (tgt.parentElement && tgt.parentElement.classList.contains(EMBED_WRAPPER_CLASS)) continue;
+      if (!rawOe) { if (figure) figure.remove(); else oe.remove(); continue; }
+      var poe = detectPlatform(rawOe);
+      if (poe === 'unknown' && !cfg.linkcardEnabled) continue; // 알수없음 + 카드 꺼짐 → 그대로
+      ctx.once('embed', function () { injectEmbedStyle(cfg); });
+      transformEmbed(tgt, rawOe, poe, cfg);
+    }
+
+    // 1b. 본문 단독 SNS 링크
+    var blocks = scope.querySelectorAll('p, div');
+    for (var b = 0; b < blocks.length; b++) {
+      var block = blocks[b];
+      if (block.dataset.ck5Lc) continue;
+      if (block.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
+      var link = soleLinkOf(block);
+      if (!link) continue;
+      var raw = link.href;
+      var platform = detectPlatform(raw);
+      if (platform === 'unknown') continue; // 링크 카드 패스에서 처리
+      // SNS 로 인식된 URL 은 (임베드하든 안 하든) 링크 카드 대상에서 제외 → 처리표시
+      block.dataset.ck5Lc = 'sns';
+      ctx.once('embed', function () { injectEmbedStyle(cfg); });
+      transformEmbed(block, raw, platform, cfg);
+    }
+  }
+
+  /** 방문자 스캔 끝: 이번 스캔에서 임베드를 만들었으면 재처리 타이머를 다시 잡는다. */
+  function snsEmbedVisitorEnd(ctx) {
+    if (!ctx.has('embed')) return;
+    // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
+    reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
+    reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
+  }
+
+  // SNS 패스 자체는 snsEnabled 로 막지 않는다(플랫폼별 판단은 transformEmbed 안). snsEnabled 는 게이트에만 쓴다.
+  core.section({
+    name: 'sns-embed',
+    scope: 'visitor',
+    order: 40,
+    load: 'eager',
+    gate: function (cfg) { return cfg.snsEnabled; },
+    styles: [EMBED_STYLE_ID],
+    visitor: snsEmbedVisitor,
+    visitorEnd: snsEmbedVisitorEnd
+  });
+
   /* ================================================================ *
    *  링크 카드
    * ================================================================ */
 
-  function isBareUrlLink(a) {
-    var href = a.getAttribute('href') || '';
-    if (!/^https?:\/\//i.test(href)) return false;
-    var text = (a.textContent || '').trim();
-    if (!/^https?:\/\//i.test(text)) return false;
-    var norm = function (u) { return u.replace(/\/+$/, '').toLowerCase(); };
-    return norm(text) === norm(href);
-  }
-
-  /** block(주로 <p>)의 유일한 의미 있는 자식이 맨URL 링크면 그 링크를 반환 */
-  function soleLinkOf(block) {
-    if ((block.textContent || '').trim() === '') return null;
-    var els = [];
-    for (var i = 0; i < block.children.length; i++) els.push(block.children[i]);
-    if (els.length !== 1) return null;
-    var only = els[0];
-    if (only.tagName !== 'A') return null;
-    if ((block.textContent || '').trim() !== (only.textContent || '').trim()) return null;
-    return isBareUrlLink(only) ? only : null;
-  }
+  var API = '/api/plugins/' + IDENTIFIER + '/link-preview';
+  var LINKCARD_STYLE_ID = 'ck5-linkcard-style';
+  var MAX_INFLIGHT = 3;
 
   function cardHtml(url, p, cfg) {
     var title = (p.title || p.domain || url).trim();
@@ -630,13 +1322,61 @@
     document.head.appendChild(el);
   }
 
+  /** 방문자 패스: 단독 일반 링크와 임베드 패스의 미지원 폴백 래퍼를 링크 카드로 바꾼다(SNS 패스 뒤). */
+  function linkCardVisitor(scope, cfg, ctx) {
+    var cardTargets = [];
+
+    // 2a. 본문 단독 일반 링크 (SNS 아님)
+    var lcBlocks = scope.querySelectorAll('p, div');
+    for (var k = 0; k < lcBlocks.length; k++) {
+      var lb = lcBlocks[k];
+      if (lb.dataset.ck5Lc) continue;
+      if (lb.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
+      var la = soleLinkOf(lb);
+      if (!la) continue;
+      if (detectPlatform(la.href) !== 'unknown') continue; // SNS 는 임베드 패스 소관
+      lb.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: la.href, replace: lb, kind: 'link' });
+    }
+
+    // 2b. 임베드 패스가 만든 미지원 폴백 래퍼 (레거시 <oembed> unknown 등)
+    var fbs = scope.querySelectorAll('.' + EMBED_WRAPPER_CLASS + '[data-ck5-embed-platform="unknown"]');
+    for (var f = 0; f < fbs.length; f++) {
+      var wrap = fbs[f];
+      if (wrap.dataset.ck5Lc) continue;
+      var fbLink = wrap.querySelector('a[href^="http"]');
+      if (!fbLink) continue;
+      wrap.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: fbLink.href, replace: wrap, kind: 'fallback' });
+    }
+
+    if (cardTargets.length) {
+      ctx.once('card', function () { injectLinkCardStyle(cfg); });
+      cardTargets.forEach(function (tt) {
+        getPreview(tt.url).then(function (p) {
+          if (!tt.replace.isConnected) return;
+          applyCard(tt.replace, tt.url, p, tt.kind, cfg);
+        });
+      });
+    }
+  }
+
+  core.section({
+    name: 'link-card',
+    scope: 'visitor',
+    order: 50,
+    load: 'eager',
+    gate: function (cfg) { return cfg.linkcardEnabled; },
+    enabled: function (cfg) { return cfg.linkcardEnabled; },
+    styles: [LINKCARD_STYLE_ID],
+    visitor: linkCardVisitor
+  });
+
   /* ================================================================ *
    *  로컬 동영상 — 렌더 승격 (방문자 화면)
    * ================================================================ */
 
   var VIDEO_STYLE_ID = 'ck5-video-style';
-  // public_id 만 잡으면 되므로 상대/절대 URL 모두 매칭. 링크 텍스트는 상관 안 함.
-  var VIDEO_URL_RE = /\/api\/plugins\/g7-ckeditor5-superpack\/video\/([a-f0-9]{32})\b/i;
 
   /** URL(상대/절대 무관) 이 이 슈퍼팩의 동영상 서빙 엔드포인트면 public_id, 아니면 null */
   function videoIdOf(url) {
@@ -714,6 +1454,32 @@
     a.replaceWith(wrap);
   }
 
+  /** 방문자 패스: 로컬 동영상 링크 → <video> 승격 */
+  function videoRenderVisitor(scope, cfg, ctx) {
+    // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.
+    var vAnchors = scope.querySelectorAll('a[href]');
+    for (var vi = 0; vi < vAnchors.length; vi++) {
+      var va = vAnchors[vi];
+      if (!videoIdOf(va.getAttribute('href') || va.href)) continue;
+      if (va.closest('.ck5-video')) continue;
+      var vblk = va.closest('p, div, figure');
+      if (vblk && vblk !== scope) vblk.dataset.ck5Lc = 'video';
+      ctx.once('video', injectVideoStyle);
+      promoteVideoAnchor(va);
+    }
+  }
+
+  core.section({
+    name: 'video-render',
+    scope: 'visitor',
+    order: 30,
+    load: 'eager',
+    gate: function (cfg) { return cfg.videoEnabled; },
+    enabled: function (cfg) { return cfg.videoEnabled; },
+    styles: [VIDEO_STYLE_ID],
+    visitor: videoRenderVisitor
+  });
+
   /* ================================================================ *
    *  로컬 동영상 — 편집 화면 업로드 UI (관리자)
    * ================================================================ */
@@ -723,13 +1489,13 @@
   var VIDEO_CHUNK = '/api/plugins/' + IDENTIFIER + '/video/upload/chunk';
   var VIDEO_COMPLETE = '/api/plugins/' + IDENTIFIER + '/video/upload/complete';
 
-  function authToken() {
-    try {
-      if (window.G7Core && window.G7Core.apiClient && window.G7Core.apiClient.getToken) {
-        return window.G7Core.apiClient.getToken() || '';
-      }
-    } catch (e) {}
-    try { return localStorage.getItem('auth_token') || ''; } catch (e) { return ''; }
+  /** 설정에 따른 허용 동영상 확장자 목록 (소문자, .mp4 항상 포함) */
+  function allowedVideoExts(cfg) {
+    var e = ['mp4'];
+    if (cfg.videoAllowMov) e.push('mov');
+    if (cfg.videoAllowWebm) e.push('webm');
+    if (cfg.videoAllowM4v) e.push('m4v');
+    return e;
   }
 
   function injectUploadStyle() {
@@ -783,20 +1549,6 @@
     document.head.appendChild(el);
   }
 
-  /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
-  function editorInstanceNear(container) {
-    var scopes = [container, container.parentElement, container.nextElementSibling];
-    for (var i = 0; i < scopes.length; i++) {
-      var sc = scopes[i];
-      if (!sc || !sc.querySelectorAll) continue;
-      var eds = sc.querySelectorAll('.ck-editor__editable_inline, .ck-editor__editable');
-      for (var j = 0; j < eds.length; j++) {
-        if (eds[j].ckeditorInstance) return eds[j].ckeditorInstance;
-      }
-    }
-    return null;
-  }
-
   /** URL 에 size 힌트를 얹는다 ('md' 는 파라미터 없음 = 기본). GHS 는 href 쿼리는 보존함(실측). */
   function videoUrlWithSize(url, size) {
     var base = String(url).replace(/[?&]size=(sm|md|lg)\b/gi, '').replace(/[?&]$/, '');
@@ -838,10 +1590,15 @@
 
   function humanMb(bytes) { return (bytes / 1024 / 1024).toFixed(1); }
 
+  /** 로그인 토큰이 있으면 Bearer 인증 헤더, 없으면 빈 객체(동영상 업로드·라이브러리 요청 공용). */
+  function authHeaders() {
+    var token = authToken();
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
   /** 파일 하나를 청크로 업로드. onProgress(0..1), 완료 시 resolve({id,url,name}). */
   function chunkedUpload(file, cfg, onProgress) {
-    var token = authToken();
-    var headers = token ? { Authorization: 'Bearer ' + token } : {};
+    var headers = authHeaders();
     var totalChunks = Math.max(1, Math.ceil(file.size / (cfg.videoChunkMb * 1024 * 1024)));
 
     return fetch(VIDEO_INIT, {
@@ -910,7 +1667,7 @@
       + '<span class="ck5sp-vbar__prog"><span></span></span>'
       + '<span class="ck5sp-vbar__msg"></span>'
       + '<input type="file" accept="' + accept + '" hidden>';
-    container.parentNode.insertBefore(bar, container);
+    try { container.parentNode.insertBefore(bar, container); } catch (e) { warnOnce('video upload bar', e); return; }
 
     var btn = bar.querySelector('.ck5sp-vbar__btn');
     var input = bar.querySelector('input[type=file]');
@@ -924,7 +1681,7 @@
     lib.hidden = true;
     lib.innerHTML = '<div class="ck5sp-vlib__head">' + esc(t('editor.video.library', '동영상 라이브러리')) + '</div><div class="ck5sp-vlib__list"></div>';
     var libList = lib.querySelector('.ck5sp-vlib__list');
-    container.parentNode.insertBefore(lib, container);
+    try { container.parentNode.insertBefore(lib, container); } catch (e) { warnOnce('video upload bar', e); return; }
 
     var libIndex = {}; // videoId -> card element
 
@@ -996,10 +1753,9 @@
         if (ids.indexOf(id) === -1 && !libIndex[id]) ids.push(id);
       }
       if (!ids.length) return;
-      var token = authToken();
       fetch(VIDEO_META, {
         method: 'POST',
-        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, authHeaders()),
         body: JSON.stringify({ ids: ids })
       })
         .then(function (r) { return r.ok ? r.json() : []; })
@@ -1056,6 +1812,15 @@
         });
     });
   }
+
+  core.section({
+    name: 'video-upload',
+    scope: 'editor',
+    editorOrder: 10,
+    load: 'eager',
+    styles: [UPLOAD_STYLE_ID],
+    editor: attachUploaderTo
+  });
 
   /* ================================================================ *
    *  클립보드 이미지 붙여넣기 — 웹페이지 "이미지 복사" → 우리 서버 업로드
@@ -1117,6 +1882,13 @@
     }
   }
 
+  /** 사용자 안내: G7Core 토스트(level = 'warning' | 'error')가 없으면 alert(이미지 업로드 기능 공용). */
+  function notify(level, msg) {
+    var toast = window.G7Core && window.G7Core.toast;
+    if (toast && typeof toast[level] === 'function') toast[level](msg);
+    else { try { window.alert(msg); } catch (e) {} }
+  }
+
   /** 붙여넣은 파일들을 기존 로컬 이미지 업로드 경로(uploadImage 커맨드)로 넘긴다.
    * 서버 크기 제한을 이미 넘는 파일은 업로드를 아예 시도하지 않고 즉시 안내한다
    * (사후 타임아웃보다 나은 사용자 경험 — 불필요한 대기 자체를 없앤다).
@@ -1132,9 +1904,7 @@
     }
     if (rejected.length) {
       var msg = t('editor.image.too_large_client_check', '이미지 파일이 너무 큽니다(최대 {max}MB). 더 작은 이미지로 다시 시도해주세요.').replace('{max}', String(maxMb));
-      var toast = window.G7Core && window.G7Core.toast;
-      if (toast && typeof toast.warning === 'function') toast.warning(msg);
-      else { try { window.alert(msg); } catch (e) {} }
+      notify('warning', msg);
     }
     if (!accepted.length) return;
     try {
@@ -1144,25 +1914,30 @@
     }
   }
 
-  /** document 캡처 단계 paste 리스너를 1회만 등록한다. */
+  /** 붙여넣기 한 번: 등록된 편집 영역 안이고 이미지 바이너리가 있으면 가로채 업로드한다. */
+  function handleImagePaste(evt) {
+    for (var i = 0; i < pasteImageRoots.length; i++) {
+      var entry = pasteImageRoots[i];
+      if (!entry.domRoot || !entry.domRoot.isConnected || !entry.domRoot.contains(evt.target)) continue;
+
+      var cd = evt.clipboardData || (evt.originalEvent && evt.originalEvent.clipboardData);
+      var files = extractClipboardImageFiles(cd);
+      if (!files.length) return; // 바이너리 없음 → CKEditor5 기본 동작에 맡김
+
+      evt.preventDefault();
+      evt.stopPropagation();
+      if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
+      uploadPastedImages(entry.editor, files);
+      return;
+    }
+  }
+
+  /** document 캡처 단계 paste 리스너를 1회만 등록한다. 처리 중 예외는 이 기능만 건너뛴다. */
   function ensurePasteImageListener() {
     if (pasteImageListenerBound || typeof document === 'undefined') return;
     pasteImageListenerBound = true;
     document.addEventListener('paste', function (evt) {
-      for (var i = 0; i < pasteImageRoots.length; i++) {
-        var entry = pasteImageRoots[i];
-        if (!entry.domRoot || !entry.domRoot.isConnected || !entry.domRoot.contains(evt.target)) continue;
-
-        var cd = evt.clipboardData || (evt.originalEvent && evt.originalEvent.clipboardData);
-        var files = extractClipboardImageFiles(cd);
-        if (!files.length) return; // 바이너리 없음 → CKEditor5 기본 동작에 맡김
-
-        evt.preventDefault();
-        evt.stopPropagation();
-        if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
-        uploadPastedImages(entry.editor, files);
-        return;
-      }
+      try { handleImagePaste(evt); } catch (e) { warnOnce('image paste', e); }
     }, true);
   }
 
@@ -1192,6 +1967,14 @@
     attachSubmitButtonUploadState(editor, domRoot);
     attachUploadTimeoutGuard(editor);
   }
+
+  core.section({
+    name: 'image-paste',
+    scope: 'editor',
+    editorOrder: 20,
+    load: 'eager',
+    editor: attachPasteImageHandlerTo
+  });
 
   /* ================================================================ *
    *  이미지 업로드 완료 전 "글 작성 완료" 제출 방지
@@ -1254,9 +2037,7 @@
       if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
 
       var msg = t('editor.image.upload_pending_submit_blocked', '이미지 업로드가 끝날 때까지 잠시만 기다려주세요. 업로드가 끝나면 다시 눌러주세요.');
-      var toast = window.G7Core && window.G7Core.toast;
-      if (toast && typeof toast.warning === 'function') toast.warning(msg);
-      else { try { window.alert(msg); } catch (e) {} }
+      notify('warning', msg);
     }, true);
   }
 
@@ -1301,7 +2082,7 @@
     var labelNode = null;
     var originalLabel = null; // null = 현재 "업로드중" 상태가 아님 (하드코딩 금지 — 실제 버튼 원문을 저장/복원)
 
-    pendingActions.on('change:hasAny', function (evt, name, value) {
+    function onHasAny(evt, name, value) {
       if (value) {
         if (originalLabel === null) {
           labelNode = findButtonLabelNode(btn);
@@ -1314,7 +2095,8 @@
         btn.disabled = false;
         originalLabel = null;
       }
-    });
+    }
+    try { pendingActions.on('change:hasAny', onHasAny); } catch (e) { warnOnce('upload state', e); }
   }
 
   /* ================================================================ *
@@ -1364,7 +2146,9 @@
   function removeStuckUploadImageElement(editor, uploadId) {
     var root = editor.model.document.getRoot();
     var target = null;
-    for (var value of editor.model.createRangeIn(root)) {
+    var walker = editor.model.createRangeIn(root).getWalker({ ignoreElementEnd: true });
+    for (var step = walker.next(); !step.done; step = walker.next()) {
+      var value = step.value;
       var item = value.item;
       if (item.getAttribute && item.getAttribute('uploadId') === uploadId) {
         target = item;
@@ -1399,9 +2183,7 @@
         try { fileRepo.destroyLoader(loader); } catch (e) {}
 
         var msg = t('editor.image.upload_timeout', '이미지 업로드가 너무 오래 걸려 취소되었습니다. 파일 크기나 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
-        var toast = window.G7Core && window.G7Core.toast;
-        if (toast && typeof toast.error === 'function') toast.error(msg);
-        else { try { window.alert(msg); } catch (e2) {} }
+        notify('error', msg);
       }, UPLOAD_STUCK_TIMEOUT_MS);
 
       function onRemoved(evt2, removedItem) {
@@ -1413,6 +2195,15 @@
       fileRepo.loaders.on('remove', onRemoved);
     });
   }
+
+  // 제출 가드는 컨테이너마다 불리지만 document 리스너는 한 번만 건다(submitGuardBound).
+  core.section({
+    name: 'upload-guards',
+    scope: 'editor',
+    editorOrder: 30,
+    load: 'eager',
+    editor: ensureSubmitGuardListener
+  });
 
   /* ================================================================ *
    *  에디터 스타일 — 본문 기본 글자크기·줄간격 (전역, 기본은 댓글 제외)
@@ -1515,38 +2306,15 @@
     markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
   }
 
-  function scanEditors() {
-    // 동영상 업로드 바/이미지 복붙 둘 다 켜짐 여부를 각자 내부에서
-    // 확인하므로(attachUploaderTo, attachPasteImageHandlerTo) 여기선 컨테이너 존재만
-    // 확인한다. (이전엔 `if (!cfg.videoEnabled) return;` 로 videoEnabled 가
-    // 꺼지면 이 순회 자체를 건너뛰었는데, 그러면 videoEnabled 와 무관한 다른
-    // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
-    // 확인하는 현재 구조가 버그 없이 이미 검증됨, 원복하지 않고 유지)
-    var containers = document.querySelectorAll('.ckeditor5-wrapper, [id^="ckeditor5-"]');
-    for (var i = 0; i < containers.length; i++) {
-      // 에디터가 실제로 붙었는지 확인 (editable 존재)
-      var cont = containers[i];
-      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
-      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
-      if (!editorInstanceNear(cont)) continue;
-      attachUploaderTo(cont);
-      attachPasteImageHandlerTo(cont);
-      ensureSubmitGuardListener();
-    }
-    // 편집 스타일 표식은 위 컨테이너 목록과 무관하게 고정 구조로 찾는다.
-    applyEditorStyleMarkers();
-  }
-
-  var editorObserver = null;
-  var editorScanTimer = null;
-  function ensureEditorObserver() {
-    if (editorObserver || typeof MutationObserver === 'undefined') return;
-    editorObserver = new MutationObserver(function () {
-      if (editorScanTimer !== null) return;
-      editorScanTimer = window.setTimeout(function () { editorScanTimer = null; scanEditors(); }, 250);
-    });
-    editorObserver.observe(document.body, { childList: true, subtree: true });
-  }
+  // 부팅 때 스타일 태그, 편집기 스캔 끝마다 표식(컨테이너 목록과 무관한 고정 구조).
+  core.section({
+    name: 'editor-style',
+    scope: 'editor',
+    load: 'eager',
+    styles: [EDITOR_STYLE_ID],
+    boot: injectEditorStyleCss,
+    editorEnd: applyEditorStyleMarkers
+  });
 
   /* ================================================================ *
    *  코드 서식 — 본문 에디터에 인라인 코드·코드 블록 버튼 (1.5.0)
@@ -1560,7 +2328,8 @@
    *    쓰지만, 대상 요소가 `.ckeditor5-wrapper` 안이 아니므로 건드리지 않는다.
    *  - 어떤 예외도 에디터 생성을 막지 않는다: 원래 config 로 넘기고 console.warn 을 한 번만.
    *  - 저장된 코드의 표시 스타일은 설정과 무관하게 항상 넣는다(끄더라도 기존 글의 코드는 보여야 함).
-   *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)는 자기 규칙이 있어 제외한다.
+   *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)도 같은 규칙을 쓴다(1.6.0, 툴바 코드 모양).
+   *    툴바 선택자는 그대로 두고 규칙마다 마크다운 선택자를 뒤에 더한다(툴바 쪽 우선순위를 바꾸지 않으려고).
    */
 
   var CODE_STYLE_ID = 'ck5sp-code-style';
@@ -1570,12 +2339,6 @@
     if (codeFormatWarned) return;
     codeFormatWarned = true;
     try { console.warn('[' + IDENTIFIER + '] code formatting disabled: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
-  }
-
-  /** 설정 `codeformat_enabled`(기본 켜짐)를 에디터 생성 시점에 읽는다. */
-  function codeFormatEnabled() {
-    var s = (window.G7Config && window.G7Config.plugins && window.G7Config.plugins[IDENTIFIER]) || {};
-    return asBool(s.codeformat_enabled, true);
   }
 
   /** 툴바 항목 복사본에 name 을 after 바로 뒤(없으면 끝)에 넣는다. 이미 있으면 그대로. */
@@ -1667,32 +2430,43 @@
     };
     var inline = ':not(pre)>code:not([data-ck5-mdc])';
     var block = 'pre:not(.ck5-md-pre)';
+    var mdInline = '.ck-content code[data-ck5-mdc]'; // 마크다운 인라인 코드(방문자 화면)
+    var mdBlock = '.ck-content pre.ck5-md-pre'; // 마크다운 코드 블록(방문자 화면)
     var el = document.createElement('style');
     el.id = CODE_STYLE_ID;
     el.textContent = ''
-      + sel(inline) + '{font-size:.9em;padding:.1em .35em;border-radius:4px;background:#f1f5f9;color:#1e293b;}'
-      + sel(block) + '{font-size:.9em;line-height:1.5;white-space:pre;overflow-x:auto;padding:.8em 1em;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;}'
-      + sel(block + '>code') + '{font-size:inherit;background:transparent;padding:0;color:inherit;white-space:inherit;}'
-      + sel(inline, 'html.dark ') + '{background:#334155;color:#e2e8f0;}'
-      + sel(block, 'html.dark ') + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}'
+      + sel(inline) + ',' + mdInline + '{font-size:.9em;padding:.1em .35em;border-radius:4px;background:#f1f5f9;color:#1e293b;}'
+      + sel(block) + ',' + mdBlock + '{font-size:.9em;line-height:1.5;white-space:pre;overflow-x:auto;padding:.8em 1em;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;}'
+      + sel(block + '>code') + ',' + mdBlock + '>code' + '{font-size:inherit;background:transparent;padding:0;color:inherit;white-space:inherit;}'
+      + sel(inline, 'html.dark ') + ',html.dark ' + mdInline + '{background:#334155;color:#e2e8f0;}'
+      + sel(block, 'html.dark ') + ',html.dark ' + mdBlock + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}'
       // 가로 스크롤바를 항상 보이게(macOS 는 평소 숨김). 웹킷 규칙은 Chrome·Safari 용이다.
       // Chrome 121+ 는 표준 scrollbar-* 가 있으면 웹킷 규칙을 무시하므로, 표준 속성은 Firefox 에만 준다.
-      + sel(block + '::-webkit-scrollbar') + '{height:8px;}'
-      + sel(block + '::-webkit-scrollbar-track') + '{background:#e2e8f0;border-radius:4px;}'
-      + sel(block + '::-webkit-scrollbar-thumb') + '{background:#64748b;border-radius:4px;}'
-      + sel(block + '::-webkit-scrollbar-track', 'html.dark ') + '{background:#1e293b;}'
-      + sel(block + '::-webkit-scrollbar-thumb', 'html.dark ') + '{background:#94a3b8;}'
+      + sel(block + '::-webkit-scrollbar') + ',' + mdBlock + '::-webkit-scrollbar' + '{height:8px;}'
+      + sel(block + '::-webkit-scrollbar-track') + ',' + mdBlock + '::-webkit-scrollbar-track' + '{background:#e2e8f0;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-thumb') + ',' + mdBlock + '::-webkit-scrollbar-thumb' + '{background:#64748b;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-track', 'html.dark ') + ',html.dark ' + mdBlock + '::-webkit-scrollbar-track' + '{background:#1e293b;}'
+      + sel(block + '::-webkit-scrollbar-thumb', 'html.dark ') + ',html.dark ' + mdBlock + '::-webkit-scrollbar-thumb' + '{background:#94a3b8;}'
       + '@supports (-moz-appearance:none){'
-      + sel(block) + '{scrollbar-width:thin;scrollbar-color:#64748b #e2e8f0;}'
-      + sel(block, 'html.dark ') + '{scrollbar-color:#94a3b8 #1e293b;}'
+      + sel(block) + ',' + mdBlock + '{scrollbar-width:thin;scrollbar-color:#64748b #e2e8f0;}'
+      + sel(block, 'html.dark ') + ',html.dark ' + mdBlock + '{scrollbar-color:#94a3b8 #1e293b;}'
       + '}'
       // 언어가 plaintext 하나라 코드 블록 split button 의 언어 목록 화살표는 쓸모가 없다(본문 에디터만).
       + '.ckeditor5-wrapper .ck-code-block-dropdown .ck-splitbutton__arrow{display:none;}';
     (document.head || document.documentElement).appendChild(el);
   }
 
-  installCodeFormatHook();
-  try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+  // install 은 등록 즉시(= 번들 평가 중 이 자리) 실행된다. 대입 훅은 CKEditor UMD 보다 먼저 걸려야 한다.
+  core.section({
+    name: 'code-format',
+    scope: 'editor',
+    load: 'eager',
+    styles: [CODE_STYLE_ID],
+    install: function () {
+      installCodeFormatHook();
+      try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+    }
+  });
 
   /* ================================================================ *
    *  코드 블록 복사 버튼 — 방문자 본문 (1.5.0)
@@ -1739,10 +2513,10 @@
     s.id = CODE_COPY_STYLE_ID;
     s.textContent = [
       // 첫 줄 위를 버튼 전용 띠로 비운다(원래 위 여백 + 36px). 화면만 바뀌고 저장·복사 텍스트에는 빈 줄이 없다.
-      // 원래 위 여백: 툴바 코드 블록 .8em(09a), 마크다운 코드 블록 12px(10).
+      // 원래 위 여백: 툴바·마크다운 코드 블록 모두 .8em(70, 1.6.0 에서 마크다운도 툴바 모양).
       '.ck-content pre[data-ck5sp-copy]{position:relative;}',
       '.ck-content pre[data-ck5sp-copy][data-ck5sp-copy]:not(.ck5-md-pre){padding-top:calc(.8em + 36px);}',
-      '.ck-content pre.ck5-md-pre[data-ck5sp-copy]{padding-top:calc(12px + 36px);}',
+      '.ck-content pre.ck5-md-pre[data-ck5sp-copy]{padding-top:calc(.8em + 36px);}',
       '.ck-content pre>.ck5sp-copy-btn{position:absolute;top:10px;right:.4em;z-index:1;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:6px;background:#e2e8f0;color:#334155;opacity:.5;cursor:pointer;font:inherit;line-height:1;transition:opacity .15s;}',
       '.ck-content pre>.ck5sp-copy-btn:hover,.ck-content pre>.ck5sp-copy-btn:focus-visible{opacity:1;}',
       '.ck-content pre>.ck5sp-copy-btn:focus-visible{outline:2px solid currentColor;outline-offset:1px;}',
@@ -1846,505 +2620,15 @@
     }
   }
 
-  /* ================================================================ *
-   *  마크다운 문법 → 서식 (렌더 시점 변환)
-   * ================================================================ */
-
-  var MD_STYLE_ID = 'ck5-md-style';
-
-  function injectMarkdownStyle() {
-    if (document.getElementById(MD_STYLE_ID)) return;
-    var el = document.createElement('style');
-    el.id = MD_STYLE_ID;
-    /* 방문자 화면(HtmlContent)은 Tailwind Preflight 가 h1~h6 를 font-size/weight:inherit 로,
-       ul/ol 를 list-style:none;padding:0 으로 리셋한다. 이 사이트엔 @tailwindcss/typography
-       (`prose`) base 가 로드돼 있지 않아 `prose-h3:text-lg` 같은 유틸도 무효 → 우리가 만든
-       <h3>/<ul> 등이 본문 텍스트와 똑같이 보인다. blockquote/code 처럼 생성 요소를 직접 스타일한다.
-       (레이어 없는 <style> 이라 @layer base 인 Preflight 보다 캐스케이드 우선.) */
-    el.textContent = ''
-      + '.ck-content [data-ck5-md] code, .ck-content code[data-ck5-mdc]{background:#f1f5f9;border-radius:4px;padding:.1em .35em;font-size:.9em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}'
-      + 'html.dark .ck-content [data-ck5-md] code, html.dark .ck-content code[data-ck5-mdc]{background:#334155;}'
-      + '.ck-content pre.ck5-md-pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px 14px;overflow:auto;font-size:.85em;line-height:1.5;white-space:pre;}'
-      + '.ck-content pre.ck5-md-pre code{background:transparent;padding:0;color:inherit;}'
-      + '.ck-content blockquote[data-ck5-md]{border-left:3px solid #cbd5e1;padding-left:.9em;color:#475569;margin:.8em 0;}'
-      + 'html.dark .ck-content blockquote[data-ck5-md]{border-color:#475569;color:#94a3b8;}'
-      + '.ck-content h1[data-ck5-md]{font-size:1.8em;font-weight:700;line-height:1.25;margin:.9em 0 .45em;}'
-      + '.ck-content h2[data-ck5-md]{font-size:1.5em;font-weight:700;line-height:1.3;margin:.85em 0 .4em;}'
-      + '.ck-content h3[data-ck5-md]{font-size:1.25em;font-weight:700;line-height:1.35;margin:.75em 0 .35em;}'
-      + '.ck-content ul[data-ck5-md]{list-style:disc outside;padding-left:1.7em;margin:.6em 0;}'
-      + '.ck-content ol[data-ck5-md]{list-style:decimal outside;padding-left:1.9em;margin:.6em 0;}'
-      + '.ck-content ul[data-ck5-md]>li, .ck-content ol[data-ck5-md]>li{display:list-item;margin:.2em 0;}'
-      + '.ck-content [data-ck5-md-inline] strong, .ck-content [data-ck5-md] strong{font-weight:700;}'
-      + '.ck-content [data-ck5-md-inline] em, .ck-content [data-ck5-md] em{font-style:italic;}'
-      + '.ck-content a[data-ck5-mda]{color:#2563eb;text-decoration:underline;}'
-      + 'html.dark .ck-content a[data-ck5-mda]{color:#60a5fa;}'
-      /* 표·구분선: CKEditor 5 content styles(표/HorizontalLine) 값에 맞춤. 열이 많은 표는 가로 스크롤. */
-      + '.ck-content figure.table[data-ck5-md]{display:block;overflow-x:auto;margin:.9em 0;}'
-      + '.ck-content figure.table[data-ck5-md]>table{border-collapse:collapse;border-spacing:0;width:100%;border:1px double #b3b3b3;}'
-      + '.ck-content figure.table[data-ck5-md] th, .ck-content figure.table[data-ck5-md] td{min-width:2em;padding:.4em;border:1px solid #bfbfbf;text-align:left;vertical-align:top;}'
-      + '.ck-content figure.table[data-ck5-md] th{font-weight:700;background:rgba(0,0,0,.05);}'
-      + 'html.dark .ck-content figure.table[data-ck5-md]>table, html.dark .ck-content figure.table[data-ck5-md] th, html.dark .ck-content figure.table[data-ck5-md] td{border-color:#475569;}'
-      + 'html.dark .ck-content figure.table[data-ck5-md] th{background:rgba(255,255,255,.06);}'
-      + '.ck-content hr[data-ck5-md]{margin:15px 0;height:4px;background:#dedede;border:0;}'
-      + 'html.dark .ck-content hr[data-ck5-md]{background:#475569;}';
-    document.head.appendChild(el);
-  }
-
-  function mdEsc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  /** 한 텍스트 조각에 인라인 마크다운 적용 → HTML 문자열 (입력은 먼저 escape). */
-  function mdInline(str, cfg) {
-    var out = mdEsc(str);
-    var stash = [];
-    var keep = function (html) { stash.push(html); return '\u0001' + (stash.length - 1) + '\u0001'; };
-    if (cfg.mdCode) {
-      out = out.replace(/`([^`\n]+?)`/g, function (_, c) { return keep('<code data-ck5-mdc="1">' + c + '</code>'); });
-    }
-    if (cfg.mdLink) {
-      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, t, u) {
-        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + t + '</a>');
-      });
-    }
-    if (cfg.mdBold) {
-      out = out.replace(/\*\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*\*/g, '<strong>$1</strong>');
-    }
-    if (cfg.mdItalic) {
-      out = out.replace(/(^|[^*\w])\*([^\s*][^*\n]*?[^\s*]|[^\s*])\*(?!\*)/g, '$1<em>$2</em>');
-    }
-    out = out.replace(/\u0001(\d+)\u0001/g, function (_, i) { return stash[+i]; });
-    return out;
-  }
-
-  /** el 의 텍스트 노드들에 인라인 마크다운 적용 (사용자가 이미 서식 준 요소는 스킵). */
-  function mdApplyInline(el, cfg) {
-    if (!el || el.dataset.ck5MdInline === '1') return;
-    if (el.querySelector('a, strong, b, em, i, code, s, u, mark, sub, sup')) { el.dataset.ck5MdInline = '1'; return; }
-    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-    var textNodes = [], n;
-    while ((n = walker.nextNode())) {
-      if (n.parentElement && n.parentElement.closest('code, pre, a')) continue;
-      textNodes.push(n);
-    }
-    textNodes.forEach(function (tn) {
-      var raw = tn.nodeValue;
-      if (!/[*`[]/.test(raw)) return;
-      var html = mdInline(raw, cfg);
-      if (html === mdEsc(raw)) return;
-      try {
-        var frag = document.createRange().createContextualFragment(html);
-        tn.parentNode.replaceChild(frag, tn);
-      } catch (e) {}
-    });
-    el.dataset.ck5MdInline = '1';
-  }
-
-  /** 구분선 줄: 같은 기호 3개 이상만(`---`, `***`, `___`), 공백·다른 문자 섞이면 아님. */
-  var MD_HR_RE = /^(?:-{3,}|\*{3,}|_{3,})$/;
-  /** GFM 표 구분 행: `|---|:---:|` 형태, 파이프 필수(파이프 없는 `---` 는 구분선). 정렬 표기는 무시. */
-  var MD_TABLE_DELIM_RE = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
-
-  /** 표 한 행 → 셀 문자열 배열 (양끝 파이프 제거, `\|` 는 셀 안의 문자 `|`). */
-  function mdTableCells(line) {
-    var s = line.trim();
-    if (s.charAt(0) === '|') s = s.slice(1);
-    if (s.slice(-1) === '|' && s.slice(-2) !== '\\|') s = s.slice(0, -1);
-    var cells = [], buf = '';
-    for (var i = 0; i < s.length; i++) {
-      var ch = s.charAt(i);
-      if (ch === '\\' && s.charAt(i + 1) === '|') { buf += '|'; i++; }
-      else if (ch === '|') { cells.push(buf.trim()); buf = ''; }
-      else buf += ch;
-    }
-    cells.push(buf.trim());
-    return cells;
-  }
-
-  /** header 줄 + 다음 줄이 GFM 표 시작(헤더·구분 행 열 수 일치)이면 열 수, 아니면 0. */
-  function mdTableCols(header, delim) {
-    if (!header || !delim || header.indexOf('|') < 0 || delim.indexOf('|') < 0) return 0;
-    if (!MD_TABLE_DELIM_RE.test(delim)) return 0;
-    var n = mdTableCells(header).length;
-    return n === mdTableCells(delim).length ? n : 0;
-  }
-
-  /**
-   * `.ck-content` 안의 마크다운 문법을 실제 서식으로 바꾼다 (방문자 화면 전용 — 편집기
-   * editable 에서는 실행 안 함). 다른 승격 패스보다 먼저 돌아 링크가 `<a>` 가 된 뒤
-   * SNS/OG 카드 로직이 걸리게 한다.
-   *
-   * 오탐 방지: 블록 변환은 **줄 전체가 문법에 정확히 맞고**(공백 필수), 그 `<p>` 에 자식
-   * 엘리먼트가 없을 때만. 목록·순서목록은 **2줄 이상 연속**일 때만(단일 "- 문장" 무시).
-   * 기울임(`*x*`)은 기본 꺼짐. 사용자가 에디터 버튼으로 서식을 준 문단은 인라인 변환 스킵.
-   */
-  function renderMarkdown(scope, cfg) {
-    if (scope.closest('.ck-editor__editable, .ck-editor')) return; // 편집 중에는 변환 안 함
-
-    // 블록 패스 + 인라인 패스 모두 멱등(변환 요소에 data-ck5-md* 마커). 스캔마다 다시 돌아도
-    // 이미 변환된 건 건너뛰므로, 콘텐츠가 뒤늦게/다시 렌더돼도 스스로 따라잡는다.
-    {
-      injectMarkdownStyle();
-
-      // Pasted markdown is often stored by CKEditor as <p>line1<br>line2<br>line3</p>
-      // (soft breaks). The block logic below assumes one line per <p>, so split any
-      // text-plus-<br>-only <p> that contains at least one block-markdown line into
-      // one <p> per <br> segment. Non-markdown multi-line paragraphs are left alone.
-      var BLOCK_MD_RE = /^(?:#{1,3}[ \t]|[-*+][ \t]|\d{1,3}\.[ \t]|>[ \t]?|```)/;
-      var splitTargets = [];
-      for (var si = 0; si < scope.children.length; si++) {
-        var sc = scope.children[si];
-        if (sc.dataset && sc.dataset.ck5Md) continue;
-        if (!/^(P|DIV)$/.test(sc.tagName)) continue;
-        if (sc.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) continue;
-        if (!sc.querySelector('br')) continue;
-        var onlyTextAndBr = true;
-        for (var cn = sc.firstChild; cn; cn = cn.nextSibling) {
-          if (cn.nodeType === 1 && cn.tagName !== 'BR') { onlyTextAndBr = false; break; }
-        }
-        if (onlyTextAndBr) splitTargets.push(sc);
-      }
-      splitTargets.forEach(function (pEl) {
-        var segs = [], buf = '';
-        for (var n = pEl.firstChild; n; n = n.nextSibling) {
-          if (n.nodeType === 1 && n.tagName === 'BR') { segs.push(buf); buf = ''; }
-          else if (n.nodeType === 3) buf += n.nodeValue;
-        }
-        segs.push(buf);
-        var anyMd = segs.some(function (s) { return BLOCK_MD_RE.test((s || '').replace(/ /g, ' ').trim()); });
-        if (!anyMd && (cfg.mdTable || cfg.mdHr)) {
-          var tl = segs.map(function (s) { return (s || '').replace(/ /g, ' ').trim(); });
-          anyMd = tl.some(function (s, ti) {
-            return (cfg.mdHr && MD_HR_RE.test(s)) || (cfg.mdTable && mdTableCols(s, tl[ti + 1]) > 0);
-          });
-        }
-        if (!anyMd) return;
-        var frag = document.createDocumentFragment();
-        segs.forEach(function (s) {
-          var np = document.createElement('p');
-          if ((s || '').replace(/ /g, ' ').trim() === '') np.appendChild(document.createElement('br'));
-          else np.textContent = s;
-          frag.appendChild(np);
-        });
-        pEl.replaceWith(frag);
-      });
-
-      var kids = [];
-      for (var i = 0; i < scope.children.length; i++) {
-        var k = scope.children[i];
-        // 이미 변환된 블록(제목·목록·인용·코드·표·구분선)은 재스캔 때도 kids 에 "경계"로 남긴다.
-        // 빠지면 그 앞뒤 줄이 연속으로 보여, 페이지의 반복 스캔에서 `- a` / `# 제목` / `- b` 가
-        // 한 목록으로 합쳐지고 제목 뒤로 밀린다. 경계는 pure() 가 false 라 어떤 변환 대상도 아니다.
-        if (k.dataset && k.dataset.ck5Md) { kids.push(k); continue; }
-        if (/^(P|DIV)$/.test(k.tagName) && !k.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) kids.push(k);
-      }
-      var lineOf = function (el) {
-        if (el.querySelector('br')) return null; // residual <br> <p> (not a split target) -> hold off block convert
-        return (el.textContent || '').replace(/ /g, ' ').trim();
-      };
-      var pure = function (el) { return !(el.dataset && el.dataset.ck5Md) && !el.querySelector('*'); };
-      var mergeList = function (kids, start, re, strip, tag) {
-        var run = [start], j = start + 1;
-        while (j < kids.length) {
-          var l = lineOf(kids[j]);
-          if (l && re.test(l) && pure(kids[j])) { run.push(j); j++; } else break;
-        }
-        if (run.length < 2) return -1;
-        var list = document.createElement(tag);
-        list.dataset.ck5Md = '1';
-        run.forEach(function (ri) {
-          var li = document.createElement('li');
-          li.textContent = lineOf(kids[ri]).replace(strip, '');
-          list.appendChild(li);
-        });
-        kids[run[0]].replaceWith(list);
-        for (var d = run.length - 1; d >= 1; d--) kids[run[d]].remove();
-        return run[run.length - 1];
-      };
-
-      var p = 0;
-      while (p < kids.length) {
-        var el = kids[p];
-        var line = lineOf(el);
-        if (line === null || line === '' || !pure(el)) { p++; continue; }
-
-        var hm = cfg.mdHeading && line.match(/^(#{1,3})[ \t]+(\S.*)$/);
-        if (hm) {
-          var h = document.createElement('h' + hm[1].length);
-          h.textContent = hm[2];
-          h.dataset.ck5Md = '1';
-          el.replaceWith(h); kids[p] = h; p++; continue;
-        }
-        if (cfg.mdList && /^[-*+][ \t]+\S/.test(line)) {
-          var e1 = mergeList(kids, p, /^[-*+][ \t]+\S/, /^[-*+][ \t]+/, 'ul');
-          if (e1 >= 0) { p = e1 + 1; continue; }
-        }
-        if (cfg.mdList && /^\d{1,3}\.[ \t]+\S/.test(line)) {
-          var e2 = mergeList(kids, p, /^\d{1,3}\.[ \t]+\S/, /^\d{1,3}\.[ \t]+/, 'ol');
-          if (e2 >= 0) { p = e2 + 1; continue; }
-        }
-        if (cfg.mdQuote && /^>[ \t]?/.test(line)) {
-          var qrun = [p], qj = p + 1;
-          while (qj < kids.length) {
-            var q2 = lineOf(kids[qj]);
-            if (q2 !== null && /^>[ \t]?/.test(q2) && pure(kids[qj])) { qrun.push(qj); qj++; } else break;
-          }
-          var bq = document.createElement('blockquote');
-          bq.dataset.ck5Md = '1';
-          qrun.forEach(function (ri, idx) {
-            if (idx) bq.appendChild(document.createElement('br'));
-            bq.appendChild(document.createTextNode(lineOf(kids[ri]).replace(/^>[ \t]?/, '')));
-          });
-          kids[qrun[0]].replaceWith(bq);
-          for (var d3 = qrun.length - 1; d3 >= 1; d3--) kids[qrun[d3]].remove();
-          p = qrun[qrun.length - 1] + 1; continue;
-        }
-        if (cfg.mdCode && /^```/.test(line)) {
-          var end = -1;
-          for (var f = p + 1; f < kids.length; f++) {
-            var fl = lineOf(kids[f]);
-            if (fl !== null && /^```\s*$/.test(fl) && !kids[f].dataset.ck5Md) { end = f; break; }
-          }
-          if (end > p) {
-            var pre = document.createElement('pre');
-            pre.className = 'ck5-md-pre'; pre.dataset.ck5Md = '1';
-            var code = document.createElement('code');
-            var lines = [];
-            for (var g = p + 1; g < end; g++) lines.push(kids[g].textContent || '');
-            code.textContent = lines.join('\n');
-            pre.appendChild(code);
-            kids[p].replaceWith(pre);
-            for (var d4 = end; d4 >= p + 1; d4--) kids[d4].remove();
-            p = end + 1; continue;
-          }
-        }
-        // 표·구분선은 기존 요소 판정이 모두 빗나간 줄에만 적용(기존 변환 결과 불변).
-        if (cfg.mdTable && p + 1 < kids.length && pure(kids[p + 1])) {
-          var cols = mdTableCols(line, lineOf(kids[p + 1]));
-          if (cols > 0) {
-            var rowEnd = p + 2;
-            while (rowEnd < kids.length) {
-              var rl = lineOf(kids[rowEnd]);
-              if (rl && rl.indexOf('|') >= 0 && pure(kids[rowEnd])) rowEnd++; else break;
-            }
-            var fig = document.createElement('figure');
-            fig.className = 'table';
-            fig.dataset.ck5Md = '1';
-            var tbl = document.createElement('table');
-            var addRow = function (parent, text, cellTag) {
-              var tr = document.createElement('tr');
-              var cells = mdTableCells(text);
-              for (var ci = 0; ci < cols; ci++) {
-                var cell = document.createElement(cellTag);
-                cell.innerHTML = mdInline(ci < cells.length ? cells[ci] : '', cfg);
-                cell.dataset.ck5MdInline = '1';
-                tr.appendChild(cell);
-              }
-              parent.appendChild(tr);
-            };
-            var thead = document.createElement('thead');
-            addRow(thead, line, 'th');
-            tbl.appendChild(thead);
-            if (rowEnd > p + 2) {
-              var tbody = document.createElement('tbody');
-              for (var r = p + 2; r < rowEnd; r++) addRow(tbody, lineOf(kids[r]), 'td');
-              tbl.appendChild(tbody);
-            }
-            fig.appendChild(tbl);
-            kids[p].replaceWith(fig);
-            for (var d5 = rowEnd - 1; d5 >= p + 1; d5--) kids[d5].remove();
-            kids.splice(p, rowEnd - p, fig);
-            p++; continue;
-          }
-        }
-        if (cfg.mdHr && MD_HR_RE.test(line)) {
-          // 방문자 화면 전용 렌더라 에디터의 HorizontalLine 로드 여부와 무관하게 <hr>.
-          // 토글이 꺼져 있으면 건드리지 않아 원문 글자(`---`) 그대로 보인다.
-          var hrEl = document.createElement('hr');
-          hrEl.dataset.ck5Md = '1';
-          el.replaceWith(hrEl); kids[p] = hrEl; p++; continue;
-        }
-        p++;
-      }
-    }
-
-    // 인라인 패스
-    var inlineEls = scope.querySelectorAll('p, h1, h2, h3, li, blockquote');
-    for (var m = 0; m < inlineEls.length; m++) {
-      var ie = inlineEls[m];
-      if (ie.closest('.ck5-video, .' + EMBED_WRAPPER_CLASS + ', .ck5-linkcard, pre')) continue;
-      mdApplyInline(ie, cfg);
-    }
-  }
-
-  /* ================================================================ *
-   *  통합 스캔
-   * ================================================================ */
-
-  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
-
-  function scan(root) {
-    root = root || document;
-    var cfg = readSettings();
-    if (!cfg.snsEnabled && !cfg.linkcardEnabled && !cfg.videoEnabled && !cfg.mdEnabled) { addCodeCopyButtons(root); return; }
-
-    var contents;
-    try { contents = root.querySelectorAll('.ck-content'); } catch (e) { return; }
-    if (!contents.length && root !== document) return;
-    if (!contents.length) contents = document.querySelectorAll('.ck-content');
-    if (!contents.length) return;
-
-    var didEmbed = false;
-    var didCard = false;
-    var didVideo = false;
-
-    for (var c = 0; c < contents.length; c++) {
-      var scope = contents[c];
-      if (isEditingArea(scope)) continue; // 편집 영역은 방문자 변환 대상이 아니다
-
-      /* ---- -1) 마크다운 문법 → 실제 서식 (다른 모든 패스보다 먼저) ---- */
-      // 링크가 실제 <a> 가 된 다음에 SNS/OG 카드 승격이 걸리도록 순서상 맨 앞.
-      if (cfg.mdEnabled) renderMarkdown(scope, cfg);
-      addCodeCopyButtons(scope);
-
-      /* ---- 0) 로컬 동영상 링크 → <video> 승격 ---- */
-      // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.
-      if (cfg.videoEnabled) {
-        var vAnchors = scope.querySelectorAll('a[href]');
-        for (var vi = 0; vi < vAnchors.length; vi++) {
-          var va = vAnchors[vi];
-          if (!videoIdOf(va.getAttribute('href') || va.href)) continue;
-          if (va.closest('.ck5-video')) continue;
-          var vblk = va.closest('p, div, figure');
-          if (vblk && vblk !== scope) vblk.dataset.ck5Lc = 'video';
-          if (!didVideo) { injectVideoStyle(); didVideo = true; }
-          promoteVideoAnchor(va);
-        }
-      }
-
-      /* ---- 1) SNS 임베드 패스 ---- */
-      // 1a. 레거시 <oembed url> (previewsInData:false 로 저장됐던 형태)
-      var oembeds = scope.querySelectorAll('oembed[url]');
-      for (var i = 0; i < oembeds.length; i++) {
-        var oe = oembeds[i];
-        var rawOe = (oe.getAttribute('url') || '').trim();
-        var figure = oe.closest('figure.media');
-        var tgt = figure || oe;
-        if (tgt.parentElement && tgt.parentElement.classList.contains(EMBED_WRAPPER_CLASS)) continue;
-        if (!rawOe) { if (figure) figure.remove(); else oe.remove(); continue; }
-        var poe = detectPlatform(rawOe);
-        if (poe === 'unknown' && !cfg.linkcardEnabled) continue; // 알수없음 + 카드 꺼짐 → 그대로
-        if (!didEmbed) { injectEmbedStyle(cfg); didEmbed = true; }
-        transformEmbed(tgt, rawOe, poe, cfg);
-      }
-
-      // 1b. 본문 단독 SNS 링크
-      var blocks = scope.querySelectorAll('p, div');
-      for (var b = 0; b < blocks.length; b++) {
-        var block = blocks[b];
-        if (block.dataset.ck5Lc) continue;
-        if (block.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
-        var link = soleLinkOf(block);
-        if (!link) continue;
-        var raw = link.href;
-        var platform = detectPlatform(raw);
-        if (platform === 'unknown') continue; // 링크 카드 패스에서 처리
-        // SNS 로 인식된 URL 은 (임베드하든 안 하든) 링크 카드 대상에서 제외 → 처리표시
-        block.dataset.ck5Lc = 'sns';
-        if (!didEmbed) { injectEmbedStyle(cfg); didEmbed = true; }
-        transformEmbed(block, raw, platform, cfg);
-      }
-
-      /* ---- 2) 링크 카드 패스 ---- */
-      if (!cfg.linkcardEnabled) continue;
-
-      var cardTargets = [];
-
-      // 2a. 본문 단독 일반 링크 (SNS 아님)
-      var lcBlocks = scope.querySelectorAll('p, div');
-      for (var k = 0; k < lcBlocks.length; k++) {
-        var lb = lcBlocks[k];
-        if (lb.dataset.ck5Lc) continue;
-        if (lb.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
-        var la = soleLinkOf(lb);
-        if (!la) continue;
-        if (detectPlatform(la.href) !== 'unknown') continue; // SNS 는 임베드 패스 소관
-        lb.dataset.ck5Lc = 'pending';
-        cardTargets.push({ url: la.href, replace: lb, kind: 'link' });
-      }
-
-      // 2b. 임베드 패스가 만든 미지원 폴백 래퍼 (레거시 <oembed> unknown 등)
-      var fbs = scope.querySelectorAll('.' + EMBED_WRAPPER_CLASS + '[data-ck5-embed-platform="unknown"]');
-      for (var f = 0; f < fbs.length; f++) {
-        var wrap = fbs[f];
-        if (wrap.dataset.ck5Lc) continue;
-        var fbLink = wrap.querySelector('a[href^="http"]');
-        if (!fbLink) continue;
-        wrap.dataset.ck5Lc = 'pending';
-        cardTargets.push({ url: fbLink.href, replace: wrap, kind: 'fallback' });
-      }
-
-      if (cardTargets.length) {
-        if (!didCard) { injectLinkCardStyle(cfg); didCard = true; }
-        cardTargets.forEach(function (tt) {
-          getPreview(tt.url).then(function (p) {
-            if (!tt.replace.isConnected) return;
-            applyCard(tt.replace, tt.url, p, tt.kind, cfg);
-          });
-        });
-      }
-    }
-
-    if (didEmbed) {
-      // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
-      reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
-      reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
-    }
-  }
-
-  /* ================================================================ *
-   *  관찰자 · 부팅
-   * ================================================================ */
-
-  var observer = null;
-  var rescanTimer = null;
-
-  function ensureObserver() {
-    if (observer || typeof MutationObserver === 'undefined') return;
-    observer = new MutationObserver(function (records) {
-      var hit = records.some(function (r) {
-        return Array.prototype.some.call(r.addedNodes, function (n) {
-          return n.nodeType === 1
-            && ((n.matches && (n.matches('.ck-content') || n.matches('.ck-content *')))
-              || (n.querySelector && n.querySelector('.ck-content')));
-        });
-      });
-      if (!hit) return;
-      // 트레일링 디바운스 — 대기 중이어도 타이머를 새로 잡는다. (기존엔 rescanTimer!==null 이면
-      // 이벤트를 버려서, 콘텐츠가 두 번에 나눠 들어오면 뒤엣것을 놓쳤다.) scan() 은 멱등이라
-      // 자기 변경으로 옵저버가 한 번 더 울려도 no-op 스캔 1회 후 멎는다.
-      if (rescanTimer !== null) window.clearTimeout(rescanTimer);
-      rescanTimer = window.setTimeout(function () {
-        rescanTimer = null;
-        scan(document);
-      }, 200);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  function run() {
-    injectEditorStyleCss(readSettings());
-    ensureObserver();
-    ensureEditorObserver();
-    if (window.requestAnimationFrame) {
-      requestAnimationFrame(function () { requestAnimationFrame(function () { scan(document); scanEditors(); }); });
-    } else {
-      scan(document);
-      scanEditors();
-    }
-    window.setTimeout(function () { scan(document); scanEditors(); }, 400);
-    window.setTimeout(function () { scan(document); scanEditors(); }, 900);
-  }
+  // 게이트 없음: 다른 방문자 기능이 모두 꺼져 있어도 root 에 한 번 돈다(코드 복사는 설정 없이 항상 켜짐).
+  core.section({
+    name: 'code-copy',
+    scope: 'visitor',
+    order: 20,
+    load: 'eager',
+    styles: [CODE_COPY_STYLE_ID],
+    visitor: addCodeCopyButtons
+  });
 
   // 코어 ActionDispatcher 가 있으면 수동 트리거용 핸들러도 등록 (레이아웃 onMount 등에서 호출 가능)
   function registerHandlers(retry) {

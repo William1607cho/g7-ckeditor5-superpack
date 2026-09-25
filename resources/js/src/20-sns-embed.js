@@ -2,6 +2,8 @@
    *  SNS 임베드
    * ================================================================ */
 
+  var EMBED_STYLE_ID = 'ck5-media-embed-style';
+
   var LABELS = { youtube: 'YouTube', twitter: 'X', instagram: 'Instagram', tiktok: 'TikTok', unknown: '' };
 
   var SCRIPTS = {
@@ -270,6 +272,18 @@
 
     if (platform === 'twitter' || platform === 'instagram' || platform === 'tiktok') {
       queuePlatform(platform);
+    }
+  }
+
+  /** 플랫폼별 렌더 허용 여부 (플랫폼 마스터 토글 && 개별 토글) */
+  function platformEnabled(cfg, platform) {
+    if (!cfg.snsEnabled) return false;
+    switch (platform) {
+      case 'youtube': return cfg.snsYoutube;
+      case 'twitter': return cfg.snsTwitter;
+      case 'instagram': return cfg.snsInstagram;
+      case 'tiktok': return cfg.snsTiktok;
+      default: return false;
     }
   }
 

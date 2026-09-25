@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-25
+
+### Changed
+
+- **Markdown code looks like toolbar code.** Markdown code (inline and fenced
+  blocks) now uses the same size, spacing, colors, borders, dark mode, and the
+  always-visible horizontal scrollbar on long lines as toolbar code. In light
+  mode a Markdown code block now has a light background instead of a dark one.
+
+### Internal
+
+- The front-end pieces in `resources/js/src/` are renumbered into bands (`00`
+  head, `01`–`09` core, `10`–`79` features, `90` boot, `99` tail), and shared
+  helpers move into core pieces. Code is only moved; behavior is unchanged.
+- Viewer-side features (Markdown, code copy, video, SNS embeds, link cards)
+  register themselves as sections, and the page scan calls them in a fixed
+  order; behavior is unchanged.
+- Editor-side features (video upload, image paste, upload guards, editor style,
+  code formatting) register as sections too; the code-formatting hook still
+  installs at the same point while the script loads. Behavior is unchanged.
+- The page watcher is merged into one MutationObserver that requests viewer
+  scans (200 ms, restarted on each change) and editor scans (250 ms, fixed
+  window) with the same delays and order as before; behavior is unchanged.
+- If a feature throws (a section hook, the upload bar insert, image paste,
+  the upload-state hook, or the watcher's viewer check), only that feature is
+  skipped and a single console warning is logged; the rest keeps running.
+- The README "Development" section describes the source layout, the core,
+  section registry and scheduler, the safety rule, and the steps (with the
+  settings checklist) for adding a feature section.
+
+No settings or database changes when updating from 1.5.0.
+
 ## [1.5.0] - 2026-09-25
 
 ### Added

@@ -14,10 +14,6 @@
        <h3>/<ul> 등이 본문 텍스트와 똑같이 보인다. blockquote/code 처럼 생성 요소를 직접 스타일한다.
        (레이어 없는 <style> 이라 @layer base 인 Preflight 보다 캐스케이드 우선.) */
     el.textContent = ''
-      + '.ck-content [data-ck5-md] code, .ck-content code[data-ck5-mdc]{background:#f1f5f9;border-radius:4px;padding:.1em .35em;font-size:.9em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}'
-      + 'html.dark .ck-content [data-ck5-md] code, html.dark .ck-content code[data-ck5-mdc]{background:#334155;}'
-      + '.ck-content pre.ck5-md-pre{background:#0f172a;color:#e2e8f0;border-radius:8px;padding:12px 14px;overflow:auto;font-size:.85em;line-height:1.5;white-space:pre;}'
-      + '.ck-content pre.ck5-md-pre code{background:transparent;padding:0;color:inherit;}'
       + '.ck-content blockquote[data-ck5-md]{border-left:3px solid #cbd5e1;padding-left:.9em;color:#475569;margin:.8em 0;}'
       + 'html.dark .ck-content blockquote[data-ck5-md]{border-color:#475569;color:#94a3b8;}'
       + '.ck-content h1[data-ck5-md]{font-size:1.8em;font-weight:700;line-height:1.25;margin:.9em 0 .45em;}'
@@ -55,8 +51,8 @@
       out = out.replace(/`([^`\n]+?)`/g, function (_, c) { return keep('<code data-ck5-mdc="1">' + c + '</code>'); });
     }
     if (cfg.mdLink) {
-      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, t, u) {
-        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + t + '</a>');
+      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, label, u) {
+        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
       });
     }
     if (cfg.mdBold) {
@@ -121,12 +117,3 @@
     return n === mdTableCells(delim).length ? n : 0;
   }
 
-  /**
-   * `.ck-content` 안의 마크다운 문법을 실제 서식으로 바꾼다 (방문자 화면 전용 — 편집기
-   * editable 에서는 실행 안 함). 다른 승격 패스보다 먼저 돌아 링크가 `<a>` 가 된 뒤
-   * SNS/OG 카드 로직이 걸리게 한다.
-   *
-   * 오탐 방지: 블록 변환은 **줄 전체가 문법에 정확히 맞고**(공백 필수), 그 `<p>` 에 자식
-   * 엘리먼트가 없을 때만. 목록·순서목록은 **2줄 이상 연속**일 때만(단일 "- 문장" 무시).
-   * 기울임(`*x*`)은 기본 꺼짐. 사용자가 에디터 버튼으로 서식을 준 문단은 인라인 변환 스킵.
-   */

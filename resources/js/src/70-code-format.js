@@ -10,7 +10,8 @@
    *    쓰지만, 대상 요소가 `.ckeditor5-wrapper` 안이 아니므로 건드리지 않는다.
    *  - 어떤 예외도 에디터 생성을 막지 않는다: 원래 config 로 넘기고 console.warn 을 한 번만.
    *  - 저장된 코드의 표시 스타일은 설정과 무관하게 항상 넣는다(끄더라도 기존 글의 코드는 보여야 함).
-   *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)는 자기 규칙이 있어 제외한다.
+   *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)도 같은 규칙을 쓴다(1.6.0, 툴바 코드 모양).
+   *    툴바 선택자는 그대로 두고 규칙마다 마크다운 선택자를 뒤에 더한다(툴바 쪽 우선순위를 바꾸지 않으려고).
    */
 
   var CODE_STYLE_ID = 'ck5sp-code-style';
@@ -20,12 +21,6 @@
     if (codeFormatWarned) return;
     codeFormatWarned = true;
     try { console.warn('[' + IDENTIFIER + '] code formatting disabled: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
-  }
-
-  /** 설정 `codeformat_enabled`(기본 켜짐)를 에디터 생성 시점에 읽는다. */
-  function codeFormatEnabled() {
-    var s = (window.G7Config && window.G7Config.plugins && window.G7Config.plugins[IDENTIFIER]) || {};
-    return asBool(s.codeformat_enabled, true);
   }
 
   /** 툴바 항목 복사본에 name 을 after 바로 뒤(없으면 끝)에 넣는다. 이미 있으면 그대로. */
@@ -117,30 +112,41 @@
     };
     var inline = ':not(pre)>code:not([data-ck5-mdc])';
     var block = 'pre:not(.ck5-md-pre)';
+    var mdInline = '.ck-content code[data-ck5-mdc]'; // 마크다운 인라인 코드(방문자 화면)
+    var mdBlock = '.ck-content pre.ck5-md-pre'; // 마크다운 코드 블록(방문자 화면)
     var el = document.createElement('style');
     el.id = CODE_STYLE_ID;
     el.textContent = ''
-      + sel(inline) + '{font-size:.9em;padding:.1em .35em;border-radius:4px;background:#f1f5f9;color:#1e293b;}'
-      + sel(block) + '{font-size:.9em;line-height:1.5;white-space:pre;overflow-x:auto;padding:.8em 1em;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;}'
-      + sel(block + '>code') + '{font-size:inherit;background:transparent;padding:0;color:inherit;white-space:inherit;}'
-      + sel(inline, 'html.dark ') + '{background:#334155;color:#e2e8f0;}'
-      + sel(block, 'html.dark ') + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}'
+      + sel(inline) + ',' + mdInline + '{font-size:.9em;padding:.1em .35em;border-radius:4px;background:#f1f5f9;color:#1e293b;}'
+      + sel(block) + ',' + mdBlock + '{font-size:.9em;line-height:1.5;white-space:pre;overflow-x:auto;padding:.8em 1em;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;}'
+      + sel(block + '>code') + ',' + mdBlock + '>code' + '{font-size:inherit;background:transparent;padding:0;color:inherit;white-space:inherit;}'
+      + sel(inline, 'html.dark ') + ',html.dark ' + mdInline + '{background:#334155;color:#e2e8f0;}'
+      + sel(block, 'html.dark ') + ',html.dark ' + mdBlock + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}'
       // 가로 스크롤바를 항상 보이게(macOS 는 평소 숨김). 웹킷 규칙은 Chrome·Safari 용이다.
       // Chrome 121+ 는 표준 scrollbar-* 가 있으면 웹킷 규칙을 무시하므로, 표준 속성은 Firefox 에만 준다.
-      + sel(block + '::-webkit-scrollbar') + '{height:8px;}'
-      + sel(block + '::-webkit-scrollbar-track') + '{background:#e2e8f0;border-radius:4px;}'
-      + sel(block + '::-webkit-scrollbar-thumb') + '{background:#64748b;border-radius:4px;}'
-      + sel(block + '::-webkit-scrollbar-track', 'html.dark ') + '{background:#1e293b;}'
-      + sel(block + '::-webkit-scrollbar-thumb', 'html.dark ') + '{background:#94a3b8;}'
+      + sel(block + '::-webkit-scrollbar') + ',' + mdBlock + '::-webkit-scrollbar' + '{height:8px;}'
+      + sel(block + '::-webkit-scrollbar-track') + ',' + mdBlock + '::-webkit-scrollbar-track' + '{background:#e2e8f0;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-thumb') + ',' + mdBlock + '::-webkit-scrollbar-thumb' + '{background:#64748b;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-track', 'html.dark ') + ',html.dark ' + mdBlock + '::-webkit-scrollbar-track' + '{background:#1e293b;}'
+      + sel(block + '::-webkit-scrollbar-thumb', 'html.dark ') + ',html.dark ' + mdBlock + '::-webkit-scrollbar-thumb' + '{background:#94a3b8;}'
       + '@supports (-moz-appearance:none){'
-      + sel(block) + '{scrollbar-width:thin;scrollbar-color:#64748b #e2e8f0;}'
-      + sel(block, 'html.dark ') + '{scrollbar-color:#94a3b8 #1e293b;}'
+      + sel(block) + ',' + mdBlock + '{scrollbar-width:thin;scrollbar-color:#64748b #e2e8f0;}'
+      + sel(block, 'html.dark ') + ',html.dark ' + mdBlock + '{scrollbar-color:#94a3b8 #1e293b;}'
       + '}'
       // 언어가 plaintext 하나라 코드 블록 split button 의 언어 목록 화살표는 쓸모가 없다(본문 에디터만).
       + '.ckeditor5-wrapper .ck-code-block-dropdown .ck-splitbutton__arrow{display:none;}';
     (document.head || document.documentElement).appendChild(el);
   }
 
-  installCodeFormatHook();
-  try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+  // install 은 등록 즉시(= 번들 평가 중 이 자리) 실행된다. 대입 훅은 CKEditor UMD 보다 먼저 걸려야 한다.
+  core.section({
+    name: 'code-format',
+    scope: 'editor',
+    load: 'eager',
+    styles: [CODE_STYLE_ID],
+    install: function () {
+      installCodeFormatHook();
+      try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+    }
+  });
 
