@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Editor-side features (video upload, image paste, upload guards, editor style,
   code formatting) register as sections too; the code-formatting hook still
   installs at the same point while the script loads. Behavior is unchanged.
+- The page watcher is merged into one MutationObserver that requests viewer
+  scans (200 ms, restarted on each change) and editor scans (250 ms, fixed
+  window) with the same delays and order as before; behavior is unchanged.
 
 ## [1.5.0] - 2026-09-25
 

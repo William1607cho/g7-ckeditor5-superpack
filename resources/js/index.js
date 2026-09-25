@@ -348,55 +348,67 @@
    *  관찰자 · 부팅
    * ================================================================ */
 
+  // 스케줄러: 감시기 하나가 방문자·편집기 스캔 요청을 낸다. 두 요청의 타이머는 따로 둔다
+  // (방문자 200ms 트레일링, 편집기 250ms 고정 창). 해제는 하지 않는다(페이지 수명).
   var observer = null;
   var rescanTimer = null;
+  var editorScanTimer = null;
+
+  /** 추가된 요소 중 .ck-content 이거나 그 안이거나 그것을 품은 것이 있으면 true(방문자 스캔 조건) */
+  function hasContentAddition(records) {
+    return records.some(function (r) {
+      return Array.prototype.some.call(r.addedNodes, function (n) {
+        return n.nodeType === 1
+          && ((n.matches && (n.matches('.ck-content') || n.matches('.ck-content *')))
+            || (n.querySelector && n.querySelector('.ck-content')));
+      });
+    });
+  }
+
+  /** 방문자 스캔 요청 */
+  function requestVisitorScan() {
+    // 트레일링 디바운스 — 대기 중이어도 타이머를 새로 잡는다. (기존엔 rescanTimer!==null 이면
+    // 이벤트를 버려서, 콘텐츠가 두 번에 나눠 들어오면 뒤엣것을 놓쳤다.) scan() 은 멱등이라
+    // 자기 변경으로 옵저버가 한 번 더 울려도 no-op 스캔 1회 후 멎는다.
+    if (rescanTimer !== null) window.clearTimeout(rescanTimer);
+    rescanTimer = window.setTimeout(function () {
+      rescanTimer = null;
+      scan(document);
+    }, 200);
+  }
+
+  /** 편집기 스캔 요청: 첫 요청 기준 고정 창(대기 중이면 버린다) */
+  function requestEditorScan() {
+    if (editorScanTimer !== null) return;
+    editorScanTimer = window.setTimeout(function () { editorScanTimer = null; scanEditors(); }, 250);
+  }
+
+  /** 방문자 스캔 뒤 편집기 스캔, 같은 자리에서 동기로 */
+  function kick() {
+    scan(document);
+    scanEditors();
+  }
 
   function ensureObserver() {
     if (observer || typeof MutationObserver === 'undefined') return;
     observer = new MutationObserver(function (records) {
-      var hit = records.some(function (r) {
-        return Array.prototype.some.call(r.addedNodes, function (n) {
-          return n.nodeType === 1
-            && ((n.matches && (n.matches('.ck-content') || n.matches('.ck-content *')))
-              || (n.querySelector && n.querySelector('.ck-content')));
-        });
-      });
-      if (!hit) return;
-      // 트레일링 디바운스 — 대기 중이어도 타이머를 새로 잡는다. (기존엔 rescanTimer!==null 이면
-      // 이벤트를 버려서, 콘텐츠가 두 번에 나눠 들어오면 뒤엣것을 놓쳤다.) scan() 은 멱등이라
-      // 자기 변경으로 옵저버가 한 번 더 울려도 no-op 스캔 1회 후 멎는다.
-      if (rescanTimer !== null) window.clearTimeout(rescanTimer);
-      rescanTimer = window.setTimeout(function () {
-        rescanTimer = null;
-        scan(document);
-      }, 200);
+      // 같은 변경 묶음에서 방문자 요청(조건부)이 먼저, 편집기 요청(무조건)이 그다음
+      if (hasContentAddition(records)) requestVisitorScan();
+      requestEditorScan();
     });
     observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  var editorObserver = null;
-  var editorScanTimer = null;
-  function ensureEditorObserver() {
-    if (editorObserver || typeof MutationObserver === 'undefined') return;
-    editorObserver = new MutationObserver(function () {
-      if (editorScanTimer !== null) return;
-      editorScanTimer = window.setTimeout(function () { editorScanTimer = null; scanEditors(); }, 250);
-    });
-    editorObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   function run() {
     runBoots(readSettings());
     ensureObserver();
-    ensureEditorObserver();
     if (window.requestAnimationFrame) {
-      requestAnimationFrame(function () { requestAnimationFrame(function () { scan(document); scanEditors(); }); });
+      requestAnimationFrame(function () { requestAnimationFrame(kick); });
     } else {
-      scan(document);
-      scanEditors();
+      kick();
     }
-    window.setTimeout(function () { scan(document); scanEditors(); }, 400);
-    window.setTimeout(function () { scan(document); scanEditors(); }, 900);
+    window.setTimeout(kick, 400);
+    window.setTimeout(kick, 900);
   }
 
   /* ================================================================ *
