@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] - 2026-09-25
 
 ### Added
 
@@ -26,11 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button in its top-right corner (it stays there while the block scrolls sideways;
   full opacity on hover or keyboard focus). The block's top padding grows by 36px
   so the button sits in an empty strip above the first line and never covers long
-  lines; this is display only, no blank line is saved or copied. It copies the code exactly as shown,
-  indentation and tabs included, using the Clipboard API with a hidden-textarea
-  fallback, and shows a check mark for 1.5 seconds. Inline code gets no button, the
-  editors (post and comment) get none, and the button is hidden when printing. It
-  is shown regardless of the *Code formatting* setting.
+  lines; this is display only, no blank line is saved or copied. It copies the code
+  exactly as shown, indentation and tabs included, using the Clipboard API with a
+  hidden-textarea fallback, and shows a check mark for 1.5 seconds. Inline code gets
+  no button, the editors (post and comment) get none, and the button is hidden when
+  printing. It is shown regardless of the *Code formatting* setting.
 
 ### Changed
 
@@ -88,17 +88,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Image pasting is no longer intercepted in the comment box.** The comment editor
   has no image upload, but pasted images were caught and then dropped. The
   paste handler and upload timeout guard are now attached to the post editor only.
-- **Missing translations added.** The image paste size notice, the "wait for the upload" notice, the "Uploading" button label, the upload timeout notice and the copy button labels now come from the language files (English and Korean) instead of built-in Korean text.
-- **Minimal link cards no longer jump after they appear.** The favicon slot stays hidden until the icon actually loads, so a blocked favicon no longer removes the slot and shifts the title.
-- **Stale editors are dropped from the image paste list**, so the list no longer grows as you move between pages.
-- **Embed re-processing is scheduled once per scan burst** (2, 5 and 10 seconds after the last scan) instead of stacking new timers on every scan.
-- **The video file picker filter follows the allowed formats**, so formats that are turned off are no longer offered.
+- **Missing translations added.** The image paste size notice, the "wait for the
+  upload" notice, the "Uploading" button label, the upload timeout notice and the
+  copy button labels now come from the language files (English and Korean) instead
+  of built-in Korean text.
+- **Minimal link cards no longer jump after they appear.** The favicon slot stays
+  hidden until the icon actually loads, so a blocked favicon no longer removes the
+  slot and shifts the title.
+- **Stale editors are dropped from the image paste list**, so the list no longer
+  grows as you move between pages.
+- **Embed re-processing is scheduled once per scan burst** (2, 5 and 10 seconds
+  after the last scan) instead of stacking new timers on every scan.
+- **The video file picker filter follows the allowed formats**, so formats that are
+  turned off are no longer offered.
 
 ### Internal
 
-- The front-end script is now kept as 12 numbered pieces in `resources/js/src/` and
-  joined by `scripts/build-js.sh` (`--check` to verify). The built
-  `dist/js/plugin.iife.js` is byte-for-byte the same as in 1.4.0.
+- The front-end source is split by feature into 14 numbered pieces in
+  `resources/js/src/`. `scripts/build-js.sh` joins them in name order into
+  `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
+  identical); `--check` verifies that both are up to date. The shipped script is
+  that joined result. `scripts/` is not included in release archives.
 
 ## [1.4.0] - 2026-09-17
 
