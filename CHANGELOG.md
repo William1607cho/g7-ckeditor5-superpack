@@ -5,13 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.0] - 2026-09-25
 
 ### Changed
 
-- Markdown code (inline and fenced blocks) now looks the same as toolbar code:
-  same size, spacing, colors, borders, dark mode, and the always-visible
-  horizontal scrollbar on long lines.
+- **Markdown code looks like toolbar code.** Markdown code (inline and fenced
+  blocks) now uses the same size, spacing, colors, borders, dark mode, and the
+  always-visible horizontal scrollbar on long lines as toolbar code. In light
+  mode a Markdown code block now has a light background instead of a dark one.
 
 ### Internal
 
@@ -30,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If a feature throws (a section hook, the upload bar insert, image paste,
   the upload-state hook, or the watcher's viewer check), only that feature is
   skipped and a single console warning is logged; the rest keeps running.
+- The README "Development" section describes the source layout, the core,
+  section registry and scheduler, the safety rule, and the steps (with the
+  settings checklist) for adding a feature section.
+
+No settings or database changes when updating from 1.5.0.
 
 ## [1.5.0] - 2026-09-25
 

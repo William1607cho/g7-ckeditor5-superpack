@@ -11,7 +11,7 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
 /**
  * CKEditor 5 슈퍼팩 플러그인 (g7-ckeditor5-superpack)
  *
- * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 기능 6가지를 더한다.
+ * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 기능 7가지를 더한다.
  *
  *  1. **SNS 링크 자동 임베드** — 본문에 단독으로 붙여넣은 YouTube·X(Twitter)·Instagram·TikTok
  *     링크를 방문자 화면에서 각 플랫폼 임베드로 치환한다.
@@ -41,9 +41,14 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
  *     이전에는 변환 엔진이 g7 코어에 직접 패치돼 있어 이 플러그인만 다른 사이트에
  *     설치하면 WebP 변환 체크박스가 조용히 무동작이었다 — v1.2.1에서 전부 이 플러그인
  *     쪽으로 옮기며 코어 패치를 완전히 제거했다).
+ *  7. **코드 서식** — 게시글 본문 에디터 툴바에 코드·코드 블록 버튼을 더하고(설치된 CKEditor
+ *     빌드의 Code·CodeBlock), 저장된 코드(툴바 코드와 마크다운 코드)를 같은 모양으로 보여 주며,
+ *     글 보기 화면의 코드 블록에 복사 버튼을 단다.
  *
  * 아키텍처: 프론트 렌더 로직은 `loading.strategy = global` 로 전 페이지에 로드되는
  * `dist/js/plugin.iife.js` 가 `.ck-content` 를 자체 스캔(+MutationObserver)해 수행한다.
+ * 이 파일은 `resources/js/src/` 의 번호 붙은 조각(코어·기능 섹션·부팅)을 이어 붙인 결과다
+ * (구조와 새 섹션 추가 절차는 README "Development" 절).
  * 편집 화면의 동영상 업로드 버튼·미디어 라이브러리·에디터 스타일 마커·이미지 복붙
  * 캡처 리스너는 `element.ckeditorInstance` 로 얹는다. CKEditor 본체(`sirsoft-ckeditor5`)는
  * 손대지 않는다 — 저장 데이터는 순수 `<a href>` 링크·원문 텍스트(이미지 복붙만 예외 —
@@ -57,9 +62,10 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
  * (`App\Support\ImageResizer::resizeInPlace()`)만 g7 코어의 정식 업스트림 기능
  * (v7.0.6+)이라 그대로 쓴다 — 이 플러그인이 재구현하지 않는다.
  *
- * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 6개
+ * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 7개
  * (SNS 임베드 / 외부 링크 카드화 / 로컬 동영상 업로드 / 마크다운 자동 변환 /
- * 에디터 스타일 / 이미지 복붙)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
+ * 에디터 스타일 / 이미지 복붙 / 코드 서식)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
+ * (코드 서식 탭은 에디터 버튼만 켜고 끈다. 저장된 코드의 표시 스타일은 항상 적용된다.)
  *
  * 참고(과거 이력): "이미지 복붙허용"이라는 이름으로 외부 이미지 URL을 서버가 대신
  * 재요청해 재호스팅하는 방식이 2026-09-11에 먼저 시도됐으나, 사이트별로 결과가
