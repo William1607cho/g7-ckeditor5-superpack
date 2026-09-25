@@ -35,6 +35,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every visitor is seen as the proxy's address and shares one link-preview
   allowance. Check it with `php artisan trusted-proxy:status`.
 
+### Fixed
+
+- **Editor style no longer drops out while you edit.** The font size and line height
+  from "Editor style" fell back to the page default when the editor gained or lost
+  focus, and stayed that way until something else changed on the page. The marker
+  class now sits on the editor's outer container, which CKEditor does not rewrite.
+- **The comment box follows "Apply to comments too".** Before, the comment editor
+  picked up the post editor's font size and line height whether that option was on
+  or off. Now it gets them only when the option is on.
+
 ### Internal
 
 - The front-end script is now kept as 12 numbered pieces in `resources/js/src/` and

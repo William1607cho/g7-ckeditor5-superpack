@@ -18,12 +18,15 @@
    *    셀렉터를 규칙에 추가한다 — CSS는 DOM 클래스 기준으로 적용되므로 그 클래스를
    *    어느 플러그인이 렌더링/승격했는지는 무관하다(슈퍼팩·g7-comment-editor 어느
    *    쪽 파일도 건드리지 않음).
-   *  - **편집 화면**: 순수 CSS 셀렉터로는 게시글 본문 에디터와 댓글 에디터의
-   *    `.ck-content`를 구분할 표식이 없어(둘 다 CKEditor5가 자동으로 붙이는
-   *    클래스), **살아있는 에디터 인스턴스**를 직접 찾아(컨테이너 셀렉터 자체가
-   *    이미 댓글 에디터의 `g7ce-wrapper`를 구조적으로 배제) 그 DOM 루트에만 마커
-   *    클래스를 붙인다 — "댓글에도 적용" 옵션은 방문자 화면(렌더링된 댓글)에만
-   *    적용되고 댓글 작성 화면(입력창) 자체는 대상이 아니다.
+   *  - **편집 화면**: 표식은 CKEditor 가 관리하지 않는 **바깥 컨테이너**에 붙이고,
+   *    CSS 는 그 아래 `.ck-editor__editable` 에 건다. 편집 루트(`getDomRoot()`)에
+   *    직접 붙이면 CKEditor 렌더러가 포커스 전환 때 루트 class 를 다시 써서 표식이
+   *    지워진다(1.5.0 에서 고침).
+   *    - 게시글 본문 에디터: `div.ckeditor5-wrapper` (sirsoft-ckeditor5
+   *      `html-editor.json` 의 고정 className 컨테이너, 편집기는 그 안에 생성)
+   *    - 댓글 에디터: `div.g7ce-wrapper` (g7-comment-editor 가 만드는 컨테이너).
+   *      "댓글에도 적용" 옵션이 켜져 있을 때만 붙인다.
+   *    컨테이너는 안에 `.ck-editor__editable` 이 있을 때만 대상이다.
    *
    * font-size/line-height 는 `ckeditor5.css`에 `.ck-content` 베이스 규칙이 아예
    * 없어(조사 확인) 경합 대상 자체가 없지만, 로드 순서가 결정론적이지 않은 동적
@@ -33,6 +36,7 @@
 
   var EDITOR_STYLE_ID = 'ck5sp-editor-style';
   var EDITOR_STYLE_MARKER = 'ck5sp-body-editor-style';
+  var COMMENT_EDITOR_STYLE_MARKER = 'ck5sp-comment-editor-style';
 
   /** 관리자 설정값으로 <style> 태그를 생성/갱신/제거한다(멱등). */
   function injectEditorStyleCss(cfg) {
@@ -45,7 +49,8 @@
     if (cfg.editorApplyToComments) selectors.push('p.text-gray-700.dark\\:text-gray-300');
     var rule = 'font-size:' + cfg.editorFontSize + 'px!important;line-height:' + cfg.editorLineHeight + '!important;';
     var css = selectors.join(',') + '{' + rule + '}'
-      + '.' + EDITOR_STYLE_MARKER + '{' + rule + '}';
+      + '.' + EDITOR_STYLE_MARKER + ' .ck-editor__editable,'
+      + '.' + COMMENT_EDITOR_STYLE_MARKER + ' .ck-editor__editable{' + rule + '}';
     if (existing) {
       if (existing.textContent !== css) existing.textContent = css;
       return;
@@ -56,22 +61,26 @@
     document.head.appendChild(el);
   }
 
-  /** 편집기 컨테이너 하나의 실제 편집 DOM 루트에 마커 클래스를 붙이거나 뗀다. */
-  function attachEditorStyleTo(container) {
-    var cfg = readSettings();
-    var editor = editorInstanceNear(container);
-    if (!editor) return;
-    var domRoot = null;
-    try { domRoot = editor.editing.view.getDomRoot(); } catch (e) {}
-    if (!domRoot) return;
-    if (domRoot.classList.contains(EDITOR_STYLE_MARKER) !== !!cfg.editorStyleEnabled) {
-      domRoot.classList.toggle(EDITOR_STYLE_MARKER, !!cfg.editorStyleEnabled);
+  /** 편집기 바깥 컨테이너에 표식 클래스를 붙이거나 뗀다(안에 편집 영역이 있을 때만 붙임). */
+  function markEditorContainers(selector, marker, enabled) {
+    var list = document.querySelectorAll(selector);
+    for (var i = 0; i < list.length; i++) {
+      var want = enabled && !!list[i].querySelector('.ck-editor__editable');
+      if (list[i].classList.contains(marker) !== want) list[i].classList.toggle(marker, want);
     }
   }
 
+  /** 본문 에디터·댓글 에디터 컨테이너의 표식을 설정에 맞춘다(멱등). */
+  function applyEditorStyleMarkers() {
+    var cfg = readSettings();
+    var on = !!cfg.editorStyleEnabled;
+    markEditorContainers('div.ckeditor5-wrapper', EDITOR_STYLE_MARKER, on);
+    markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
+  }
+
   function scanEditors() {
-    // 동영상 업로드 바/에디터 스타일 마커 둘 다 켜짐 여부를 각자 내부에서
-    // 확인하므로(attachUploaderTo, attachEditorStyleTo) 여기선 컨테이너 존재만
+    // 동영상 업로드 바/이미지 복붙 둘 다 켜짐 여부를 각자 내부에서
+    // 확인하므로(attachUploaderTo, attachPasteImageHandlerTo) 여기선 컨테이너 존재만
     // 확인한다. (이전엔 `if (!cfg.videoEnabled) return;` 로 videoEnabled 가
     // 꺼지면 이 순회 자체를 건너뛰었는데, 그러면 videoEnabled 와 무관한 다른
     // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
@@ -82,10 +91,11 @@
       var cont = containers[i];
       if (!editorInstanceNear(cont)) continue;
       attachUploaderTo(cont);
-      attachEditorStyleTo(cont);
       attachPasteImageHandlerTo(cont);
       ensureSubmitGuardListener();
     }
+    // 편집 스타일 표식은 위 컨테이너 목록과 무관하게 고정 구조로 찾는다.
+    applyEditorStyleMarkers();
   }
 
   var editorObserver = null;
