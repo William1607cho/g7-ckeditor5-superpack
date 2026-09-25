@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Viewer-side features (Markdown, code copy, video, SNS embeds, link cards)
   register themselves as sections, and the page scan calls them in a fixed
   order; behavior is unchanged.
+- Editor-side features (video upload, image paste, upload guards, editor style,
+  code formatting) register as sections too; the code-formatting hook still
+  installs at the same point while the script loads. Behavior is unchanged.
 
 ## [1.5.0] - 2026-09-25
 

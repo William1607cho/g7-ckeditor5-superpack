@@ -12,11 +12,9 @@
       // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
       if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
       if (!editorInstanceNear(cont)) continue;
-      attachUploaderTo(cont);
-      attachPasteImageHandlerTo(cont);
-      ensureSubmitGuardListener();
+      runEditors(cont);
     }
     // 편집 스타일 표식은 위 컨테이너 목록과 무관하게 고정 구조로 찾는다.
-    applyEditorStyleMarkers();
+    runEditorEnds();
   }
 

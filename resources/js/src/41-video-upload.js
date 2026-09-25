@@ -108,10 +108,15 @@
 
   function humanMb(bytes) { return (bytes / 1024 / 1024).toFixed(1); }
 
+  /** 로그인 토큰이 있으면 Bearer 인증 헤더, 없으면 빈 객체(동영상 업로드·라이브러리 요청 공용). */
+  function authHeaders() {
+    var token = authToken();
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
   /** 파일 하나를 청크로 업로드. onProgress(0..1), 완료 시 resolve({id,url,name}). */
   function chunkedUpload(file, cfg, onProgress) {
-    var token = authToken();
-    var headers = token ? { Authorization: 'Bearer ' + token } : {};
+    var headers = authHeaders();
     var totalChunks = Math.max(1, Math.ceil(file.size / (cfg.videoChunkMb * 1024 * 1024)));
 
     return fetch(VIDEO_INIT, {

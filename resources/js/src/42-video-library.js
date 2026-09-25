@@ -106,10 +106,9 @@
         if (ids.indexOf(id) === -1 && !libIndex[id]) ids.push(id);
       }
       if (!ids.length) return;
-      var token = authToken();
       fetch(VIDEO_META, {
         method: 'POST',
-        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, authHeaders()),
         body: JSON.stringify({ ids: ids })
       })
         .then(function (r) { return r.ok ? r.json() : []; })
@@ -166,4 +165,13 @@
         });
     });
   }
+
+  core.section({
+    name: 'video-upload',
+    scope: 'editor',
+    editorOrder: 10,
+    load: 'eager',
+    styles: [UPLOAD_STYLE_ID],
+    editor: attachUploaderTo
+  });
 

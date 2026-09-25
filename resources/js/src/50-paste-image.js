@@ -58,6 +58,13 @@
     }
   }
 
+  /** 사용자 안내: G7Core 토스트(level = 'warning' | 'error')가 없으면 alert(이미지 업로드 기능 공용). */
+  function notify(level, msg) {
+    var toast = window.G7Core && window.G7Core.toast;
+    if (toast && typeof toast[level] === 'function') toast[level](msg);
+    else { try { window.alert(msg); } catch (e) {} }
+  }
+
   /** 붙여넣은 파일들을 기존 로컬 이미지 업로드 경로(uploadImage 커맨드)로 넘긴다.
    * 서버 크기 제한을 이미 넘는 파일은 업로드를 아예 시도하지 않고 즉시 안내한다
    * (사후 타임아웃보다 나은 사용자 경험 — 불필요한 대기 자체를 없앤다).
@@ -73,9 +80,7 @@
     }
     if (rejected.length) {
       var msg = t('editor.image.too_large_client_check', '이미지 파일이 너무 큽니다(최대 {max}MB). 더 작은 이미지로 다시 시도해주세요.').replace('{max}', String(maxMb));
-      var toast = window.G7Core && window.G7Core.toast;
-      if (toast && typeof toast.warning === 'function') toast.warning(msg);
-      else { try { window.alert(msg); } catch (e) {} }
+      notify('warning', msg);
     }
     if (!accepted.length) return;
     try {
@@ -133,4 +138,12 @@
     attachSubmitButtonUploadState(editor, domRoot);
     attachUploadTimeoutGuard(editor);
   }
+
+  core.section({
+    name: 'image-paste',
+    scope: 'editor',
+    editorOrder: 20,
+    load: 'eager',
+    editor: attachPasteImageHandlerTo
+  });
 

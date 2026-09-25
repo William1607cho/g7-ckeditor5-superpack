@@ -68,7 +68,7 @@
   }
 
   function run() {
-    injectEditorStyleCss(readSettings());
+    runBoots(readSettings());
     ensureObserver();
     ensureEditorObserver();
     if (window.requestAnimationFrame) {

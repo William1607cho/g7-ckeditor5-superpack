@@ -6,11 +6,15 @@
    *  - 방문자 패스는 `order` 오름차순(같은 값은 등록 순)으로 섹션을 부른다. 결합 순서에 기대지 않는다.
    *  - `gate(cfg)` 가 있는 섹션 중 하나라도 참이어야 `.ck-content` 를 돈다. 모두 거짓이면
    *    게이트 없는 섹션만 root 에 한 번 부른다(1.5.0 scan 의 조기 반환과 같다).
-   *  - 받기만 하고 아직 부르지 않는 항목: editorOrder·settings·install·boot·editor·editorEnd·guard.
+   *  - 편집기 패스는 `editorOrder` 오름차순으로 컨테이너마다 `editor(container)` 를, 스캔 끝에
+   *    `editorEnd()` 를 부른다. `boot(cfg)` 는 부팅 run() 첫머리에서 한 번.
+   *  - `install()` 은 등록 직후 그 자리에서 바로 부른다(= 번들 평가 중 그 조각의 위치).
+   *  - 받기만 하고 아직 부르지 않는 항목: settings·guard.
    *  - `load` 는 'eager' 만 받는다(지연 로드는 자리만 둔다).
    */
 
   var sections = []; // 등록된 섹션 spec — 방문자 order 오름차순, order 없는 섹션은 뒤
+  var editorSections = []; // 편집기 섹션 spec — editorOrder 오름차순, editorOrder 없는 섹션은 뒤
   var namespaces = {};
 
   var core = {
@@ -27,6 +31,14 @@
     return isVisitorSection(spec) ? spec.order : Infinity;
   }
 
+  function isEditorSection(spec) {
+    return spec.scope === 'editor' || spec.scope === 'both';
+  }
+
+  function editorOrderOf(spec) {
+    return spec.editor ? spec.editorOrder : Infinity;
+  }
+
   function registerSection(spec) {
     if (!spec || typeof spec.name !== 'string' || !spec.name) { logger.warn('section: name is required'); return; }
     for (var i = 0; i < sections.length; i++) {
@@ -34,9 +46,16 @@
     }
     if (spec.load !== undefined && spec.load !== 'eager') { logger.warn('section: only eager load is supported: ' + spec.name); return; }
     if (isVisitorSection(spec) && typeof spec.order !== 'number') { logger.warn('section: visitor order is required: ' + spec.name); return; }
+    if (isEditorSection(spec) && spec.editor && typeof spec.editorOrder !== 'number') { logger.warn('section: editor order is required: ' + spec.name); return; }
     var at = sections.length;
     while (at > 0 && visitorOrderOf(sections[at - 1]) > visitorOrderOf(spec)) at--;
     sections.splice(at, 0, spec);
+    if (isEditorSection(spec)) {
+      var ea = editorSections.length;
+      while (ea > 0 && editorOrderOf(editorSections[ea - 1]) > editorOrderOf(spec)) ea--;
+      editorSections.splice(ea, 0, spec);
+    }
+    if (spec.install) spec.install();
   }
 
   /** 방문자 스캔 한 번 동안 섹션끼리 나누는 표시. once 는 1.5.0 의 `if (!didX) { …; didX = true; }` 와 같다. */
@@ -84,6 +103,27 @@
     for (var i = 0; i < sections.length; i++) {
       var s = sections[i];
       if (isVisitorSection(s) && s.visitorEnd) s.visitorEnd(ctx, cfg);
+    }
+  }
+
+  /** 부팅(run() 첫머리) 때 한 번 */
+  function runBoots(cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].boot) sections[i].boot(cfg);
+    }
+  }
+
+  /** 편집기 컨테이너 하나(편집기 인스턴스 확인 뒤)에 편집기 섹션을 editorOrder 순으로 */
+  function runEditors(container) {
+    for (var i = 0; i < editorSections.length; i++) {
+      if (editorSections[i].editor) editorSections[i].editor(container);
+    }
+  }
+
+  /** 편집기 스캔 한 번이 끝난 뒤(컨테이너 목록과 무관) */
+  function runEditorEnds() {
+    for (var i = 0; i < editorSections.length; i++) {
+      if (editorSections[i].editorEnd) editorSections[i].editorEnd();
     }
   }
 

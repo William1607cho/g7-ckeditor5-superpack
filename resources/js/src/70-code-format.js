@@ -135,6 +135,15 @@
     (document.head || document.documentElement).appendChild(el);
   }
 
-  installCodeFormatHook();
-  try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+  // install 은 등록 즉시(= 번들 평가 중 이 자리) 실행된다. 대입 훅은 CKEditor UMD 보다 먼저 걸려야 한다.
+  core.section({
+    name: 'code-format',
+    scope: 'editor',
+    load: 'eager',
+    styles: [CODE_STYLE_ID],
+    install: function () {
+      installCodeFormatHook();
+      try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+    }
+  });
 

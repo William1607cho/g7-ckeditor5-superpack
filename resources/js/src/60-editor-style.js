@@ -99,3 +99,13 @@
     markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
   }
 
+  // 부팅 때 스타일 태그, 편집기 스캔 끝마다 표식(컨테이너 목록과 무관한 고정 구조).
+  core.section({
+    name: 'editor-style',
+    scope: 'editor',
+    load: 'eager',
+    styles: [EDITOR_STYLE_ID],
+    boot: injectEditorStyleCss,
+    editorEnd: applyEditorStyleMarkers
+  });
+

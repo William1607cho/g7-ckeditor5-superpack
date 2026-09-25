@@ -181,12 +181,10 @@
       // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
       if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
       if (!editorInstanceNear(cont)) continue;
-      attachUploaderTo(cont);
-      attachPasteImageHandlerTo(cont);
-      ensureSubmitGuardListener();
+      runEditors(cont);
     }
     // 편집 스타일 표식은 위 컨테이너 목록과 무관하게 고정 구조로 찾는다.
-    applyEditorStyleMarkers();
+    runEditorEnds();
   }
 
   /* ================================================================ *
@@ -197,11 +195,15 @@
    *  - 방문자 패스는 `order` 오름차순(같은 값은 등록 순)으로 섹션을 부른다. 결합 순서에 기대지 않는다.
    *  - `gate(cfg)` 가 있는 섹션 중 하나라도 참이어야 `.ck-content` 를 돈다. 모두 거짓이면
    *    게이트 없는 섹션만 root 에 한 번 부른다(1.5.0 scan 의 조기 반환과 같다).
-   *  - 받기만 하고 아직 부르지 않는 항목: editorOrder·settings·install·boot·editor·editorEnd·guard.
+   *  - 편집기 패스는 `editorOrder` 오름차순으로 컨테이너마다 `editor(container)` 를, 스캔 끝에
+   *    `editorEnd()` 를 부른다. `boot(cfg)` 는 부팅 run() 첫머리에서 한 번.
+   *  - `install()` 은 등록 직후 그 자리에서 바로 부른다(= 번들 평가 중 그 조각의 위치).
+   *  - 받기만 하고 아직 부르지 않는 항목: settings·guard.
    *  - `load` 는 'eager' 만 받는다(지연 로드는 자리만 둔다).
    */
 
   var sections = []; // 등록된 섹션 spec — 방문자 order 오름차순, order 없는 섹션은 뒤
+  var editorSections = []; // 편집기 섹션 spec — editorOrder 오름차순, editorOrder 없는 섹션은 뒤
   var namespaces = {};
 
   var core = {
@@ -218,6 +220,14 @@
     return isVisitorSection(spec) ? spec.order : Infinity;
   }
 
+  function isEditorSection(spec) {
+    return spec.scope === 'editor' || spec.scope === 'both';
+  }
+
+  function editorOrderOf(spec) {
+    return spec.editor ? spec.editorOrder : Infinity;
+  }
+
   function registerSection(spec) {
     if (!spec || typeof spec.name !== 'string' || !spec.name) { logger.warn('section: name is required'); return; }
     for (var i = 0; i < sections.length; i++) {
@@ -225,9 +235,16 @@
     }
     if (spec.load !== undefined && spec.load !== 'eager') { logger.warn('section: only eager load is supported: ' + spec.name); return; }
     if (isVisitorSection(spec) && typeof spec.order !== 'number') { logger.warn('section: visitor order is required: ' + spec.name); return; }
+    if (isEditorSection(spec) && spec.editor && typeof spec.editorOrder !== 'number') { logger.warn('section: editor order is required: ' + spec.name); return; }
     var at = sections.length;
     while (at > 0 && visitorOrderOf(sections[at - 1]) > visitorOrderOf(spec)) at--;
     sections.splice(at, 0, spec);
+    if (isEditorSection(spec)) {
+      var ea = editorSections.length;
+      while (ea > 0 && editorOrderOf(editorSections[ea - 1]) > editorOrderOf(spec)) ea--;
+      editorSections.splice(ea, 0, spec);
+    }
+    if (spec.install) spec.install();
   }
 
   /** 방문자 스캔 한 번 동안 섹션끼리 나누는 표시. once 는 1.5.0 의 `if (!didX) { …; didX = true; }` 와 같다. */
@@ -275,6 +292,27 @@
     for (var i = 0; i < sections.length; i++) {
       var s = sections[i];
       if (isVisitorSection(s) && s.visitorEnd) s.visitorEnd(ctx, cfg);
+    }
+  }
+
+  /** 부팅(run() 첫머리) 때 한 번 */
+  function runBoots(cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].boot) sections[i].boot(cfg);
+    }
+  }
+
+  /** 편집기 컨테이너 하나(편집기 인스턴스 확인 뒤)에 편집기 섹션을 editorOrder 순으로 */
+  function runEditors(container) {
+    for (var i = 0; i < editorSections.length; i++) {
+      if (editorSections[i].editor) editorSections[i].editor(container);
+    }
+  }
+
+  /** 편집기 스캔 한 번이 끝난 뒤(컨테이너 목록과 무관) */
+  function runEditorEnds() {
+    for (var i = 0; i < editorSections.length; i++) {
+      if (editorSections[i].editorEnd) editorSections[i].editorEnd();
     }
   }
 
@@ -348,7 +386,7 @@
   }
 
   function run() {
-    injectEditorStyleCss(readSettings());
+    runBoots(readSettings());
     ensureObserver();
     ensureEditorObserver();
     if (window.requestAnimationFrame) {
@@ -1520,10 +1558,15 @@
 
   function humanMb(bytes) { return (bytes / 1024 / 1024).toFixed(1); }
 
+  /** 로그인 토큰이 있으면 Bearer 인증 헤더, 없으면 빈 객체(동영상 업로드·라이브러리 요청 공용). */
+  function authHeaders() {
+    var token = authToken();
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
   /** 파일 하나를 청크로 업로드. onProgress(0..1), 완료 시 resolve({id,url,name}). */
   function chunkedUpload(file, cfg, onProgress) {
-    var token = authToken();
-    var headers = token ? { Authorization: 'Bearer ' + token } : {};
+    var headers = authHeaders();
     var totalChunks = Math.max(1, Math.ceil(file.size / (cfg.videoChunkMb * 1024 * 1024)));
 
     return fetch(VIDEO_INIT, {
@@ -1678,10 +1721,9 @@
         if (ids.indexOf(id) === -1 && !libIndex[id]) ids.push(id);
       }
       if (!ids.length) return;
-      var token = authToken();
       fetch(VIDEO_META, {
         method: 'POST',
-        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, token ? { Authorization: 'Bearer ' + token } : {}),
+        headers: Object.assign({ 'Content-Type': 'application/json', Accept: 'application/json' }, authHeaders()),
         body: JSON.stringify({ ids: ids })
       })
         .then(function (r) { return r.ok ? r.json() : []; })
@@ -1738,6 +1780,15 @@
         });
     });
   }
+
+  core.section({
+    name: 'video-upload',
+    scope: 'editor',
+    editorOrder: 10,
+    load: 'eager',
+    styles: [UPLOAD_STYLE_ID],
+    editor: attachUploaderTo
+  });
 
   /* ================================================================ *
    *  클립보드 이미지 붙여넣기 — 웹페이지 "이미지 복사" → 우리 서버 업로드
@@ -1799,6 +1850,13 @@
     }
   }
 
+  /** 사용자 안내: G7Core 토스트(level = 'warning' | 'error')가 없으면 alert(이미지 업로드 기능 공용). */
+  function notify(level, msg) {
+    var toast = window.G7Core && window.G7Core.toast;
+    if (toast && typeof toast[level] === 'function') toast[level](msg);
+    else { try { window.alert(msg); } catch (e) {} }
+  }
+
   /** 붙여넣은 파일들을 기존 로컬 이미지 업로드 경로(uploadImage 커맨드)로 넘긴다.
    * 서버 크기 제한을 이미 넘는 파일은 업로드를 아예 시도하지 않고 즉시 안내한다
    * (사후 타임아웃보다 나은 사용자 경험 — 불필요한 대기 자체를 없앤다).
@@ -1814,9 +1872,7 @@
     }
     if (rejected.length) {
       var msg = t('editor.image.too_large_client_check', '이미지 파일이 너무 큽니다(최대 {max}MB). 더 작은 이미지로 다시 시도해주세요.').replace('{max}', String(maxMb));
-      var toast = window.G7Core && window.G7Core.toast;
-      if (toast && typeof toast.warning === 'function') toast.warning(msg);
-      else { try { window.alert(msg); } catch (e) {} }
+      notify('warning', msg);
     }
     if (!accepted.length) return;
     try {
@@ -1874,6 +1930,14 @@
     attachSubmitButtonUploadState(editor, domRoot);
     attachUploadTimeoutGuard(editor);
   }
+
+  core.section({
+    name: 'image-paste',
+    scope: 'editor',
+    editorOrder: 20,
+    load: 'eager',
+    editor: attachPasteImageHandlerTo
+  });
 
   /* ================================================================ *
    *  이미지 업로드 완료 전 "글 작성 완료" 제출 방지
@@ -1936,9 +2000,7 @@
       if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
 
       var msg = t('editor.image.upload_pending_submit_blocked', '이미지 업로드가 끝날 때까지 잠시만 기다려주세요. 업로드가 끝나면 다시 눌러주세요.');
-      var toast = window.G7Core && window.G7Core.toast;
-      if (toast && typeof toast.warning === 'function') toast.warning(msg);
-      else { try { window.alert(msg); } catch (e) {} }
+      notify('warning', msg);
     }, true);
   }
 
@@ -2046,7 +2108,9 @@
   function removeStuckUploadImageElement(editor, uploadId) {
     var root = editor.model.document.getRoot();
     var target = null;
-    for (var value of editor.model.createRangeIn(root)) {
+    var walker = editor.model.createRangeIn(root).getWalker({ ignoreElementEnd: true });
+    for (var step = walker.next(); !step.done; step = walker.next()) {
+      var value = step.value;
       var item = value.item;
       if (item.getAttribute && item.getAttribute('uploadId') === uploadId) {
         target = item;
@@ -2081,9 +2145,7 @@
         try { fileRepo.destroyLoader(loader); } catch (e) {}
 
         var msg = t('editor.image.upload_timeout', '이미지 업로드가 너무 오래 걸려 취소되었습니다. 파일 크기나 네트워크 상태를 확인한 뒤 다시 시도해주세요.');
-        var toast = window.G7Core && window.G7Core.toast;
-        if (toast && typeof toast.error === 'function') toast.error(msg);
-        else { try { window.alert(msg); } catch (e2) {} }
+        notify('error', msg);
       }, UPLOAD_STUCK_TIMEOUT_MS);
 
       function onRemoved(evt2, removedItem) {
@@ -2095,6 +2157,15 @@
       fileRepo.loaders.on('remove', onRemoved);
     });
   }
+
+  // 제출 가드는 컨테이너마다 불리지만 document 리스너는 한 번만 건다(submitGuardBound).
+  core.section({
+    name: 'upload-guards',
+    scope: 'editor',
+    editorOrder: 30,
+    load: 'eager',
+    editor: ensureSubmitGuardListener
+  });
 
   /* ================================================================ *
    *  에디터 스타일 — 본문 기본 글자크기·줄간격 (전역, 기본은 댓글 제외)
@@ -2196,6 +2267,16 @@
     markEditorContainers('div.ckeditor5-wrapper', EDITOR_STYLE_MARKER, on);
     markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
   }
+
+  // 부팅 때 스타일 태그, 편집기 스캔 끝마다 표식(컨테이너 목록과 무관한 고정 구조).
+  core.section({
+    name: 'editor-style',
+    scope: 'editor',
+    load: 'eager',
+    styles: [EDITOR_STYLE_ID],
+    boot: injectEditorStyleCss,
+    editorEnd: applyEditorStyleMarkers
+  });
 
   /* ================================================================ *
    *  코드 서식 — 본문 에디터에 인라인 코드·코드 블록 버튼 (1.5.0)
@@ -2334,8 +2415,17 @@
     (document.head || document.documentElement).appendChild(el);
   }
 
-  installCodeFormatHook();
-  try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+  // install 은 등록 즉시(= 번들 평가 중 이 자리) 실행된다. 대입 훅은 CKEditor UMD 보다 먼저 걸려야 한다.
+  core.section({
+    name: 'code-format',
+    scope: 'editor',
+    load: 'eager',
+    styles: [CODE_STYLE_ID],
+    install: function () {
+      installCodeFormatHook();
+      try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+    }
+  });
 
   /* ================================================================ *
    *  코드 블록 복사 버튼 — 방문자 본문 (1.5.0)
