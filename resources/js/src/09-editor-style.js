@@ -38,6 +38,26 @@
   var EDITOR_STYLE_MARKER = 'ck5sp-body-editor-style';
   var COMMENT_EDITOR_STYLE_MARKER = 'ck5sp-comment-editor-style';
 
+  /**
+   * 에디터 제목(CKEditor 기본 heading 옵션: 제목 1·2·3 = h2·h3·h4)의 크기·줄간격·여백·굵기.
+   * 템플릿 Tailwind Preflight 가 h1~h6 를 `font-size/font-weight: inherit` 로 리셋해 제목이
+   * 본문 크기로 보이므로 여기서 준다. em 은 본문 글자 크기(글자 크기) / 그 제목 자신의 크기(여백) 기준.
+   * `!important` 는 쓰지 않는다 — 사용자가 인라인 style 로 준 크기가 이기게 한다.
+   * 마크다운 변환 제목(`[data-ck5-md]`)은 자기 규칙(10 조각)이 있으므로 제외한다.
+   */
+  var EDITOR_HEADINGS = [
+    ['h2', '1.5em', '1.2em', '.6em'],
+    ['h3', '1.3em', '1.1em', '.5em'],
+    ['h4', '1.15em', '1em', '.5em']
+  ];
+
+  function editorHeadingCss(scopes) {
+    return EDITOR_HEADINGS.map(function (h) {
+      var sel = scopes.map(function (s) { return s + ' ' + h[0] + ':not([data-ck5-md])'; }).join(',');
+      return sel + '{font-size:' + h[1] + ';line-height:1.4;margin-top:' + h[2] + ';margin-bottom:' + h[3] + ';font-weight:700;}';
+    }).join('');
+  }
+
   /** 관리자 설정값으로 <style> 태그를 생성/갱신/제거한다(멱등). */
   function injectEditorStyleCss(cfg) {
     var existing = document.getElementById(EDITOR_STYLE_ID);
@@ -47,10 +67,11 @@
     }
     var selectors = ['.ck-content.prose'];
     if (cfg.editorApplyToComments) selectors.push('p.text-gray-700.dark\\:text-gray-300');
+    var editorScopes = ['.' + EDITOR_STYLE_MARKER + ' .ck-editor__editable', '.' + COMMENT_EDITOR_STYLE_MARKER + ' .ck-editor__editable'];
     var rule = 'font-size:' + cfg.editorFontSize + 'px!important;line-height:' + cfg.editorLineHeight + '!important;';
     var css = selectors.join(',') + '{' + rule + '}'
-      + '.' + EDITOR_STYLE_MARKER + ' .ck-editor__editable,'
-      + '.' + COMMENT_EDITOR_STYLE_MARKER + ' .ck-editor__editable{' + rule + '}';
+      + editorScopes.join(',') + '{' + rule + '}'
+      + editorHeadingCss(selectors.concat(editorScopes));
     if (existing) {
       if (existing.textContent !== css) existing.textContent = css;
       return;

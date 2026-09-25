@@ -48,6 +48,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The comment box follows "Apply to comments too".** Before, the comment editor
   picked up the post editor's font size and line height whether that option was on
   or off. Now it gets them only when the option is on.
+- **Headings from the toolbar look like headings again.** With "Editor style" on,
+  Heading 1/2/3 (`h2`/`h3`/`h4`) showed at body size in the editor and on the post
+  page, because the theme resets heading sizes to `inherit`. They now get 1.5 / 1.3 /
+  1.15 times the body size, bold, with their own line height and spacing. Sizes set
+  inline with the font-size tool still win, and Markdown headings keep their own
+  styles.
 
 ### Internal
 
