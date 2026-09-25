@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every visitor is seen as the proxy's address and shares one link-preview
   allowance. Check it with `php artisan trusted-proxy:status`.
 
+### Internal
+
+- The front-end script is now kept as 12 numbered pieces in `resources/js/src/` and
+  joined by `scripts/build-js.sh` (`--check` to verify). The built
+  `dist/js/plugin.iife.js` is byte-for-byte the same as in 1.4.0.
+
 ## [1.4.0] - 2026-09-17
 
 ### Security

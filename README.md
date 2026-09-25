@@ -347,6 +347,19 @@ followed by that feature's detailed options:
 - **Link cards: non-UTF-8 pages** (e.g. EUC-KR) are not converted. Invalid bytes
   are replaced, so titles from such pages can show replacement characters.
 
+## Development
+
+- The front-end source lives in `resources/js/src/` as numbered pieces
+  (`01-head.js` … `12-scan-boot.js`). They are consecutive slices of one IIFE, so a
+  piece is not a complete script on its own.
+- `scripts/build-js.sh` joins the pieces in name order and writes the result to both
+  `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
+  identical). `scripts/build-js.sh --check` writes nothing and exits `1` if either
+  file is out of date.
+- After editing a piece, always run `scripts/build-js.sh` and commit the rebuilt
+  files. No npm or bundler is involved. `scripts/` is not included in release
+  archives.
+
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
 **관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 6개, 기능별로 하나씩.
@@ -402,6 +415,16 @@ followed by that feature's detailed options:
     (스크린샷 붙여넣기 경로에도 소급 적용).
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
+
+### 개발
+
+- 프런트 소스는 `resources/js/src/`에 번호 붙은 조각(`01-head.js` … `12-scan-boot.js`)으로
+  있습니다. 조각은 하나의 IIFE를 이어서 자른 것이라, 조각 하나만으로는 완결된 스크립트가 아닙니다.
+- `scripts/build-js.sh`가 조각을 이름 순으로 이어 붙여 `dist/js/plugin.iife.js`와
+  `resources/js/index.js` 두 곳에 씁니다(두 파일은 항상 같습니다). `--check`를 붙이면 파일을
+  쓰지 않고, 어느 한쪽이라도 결합 결과와 다르면 `1`로 끝납니다.
+- 조각을 고친 뒤에는 반드시 `scripts/build-js.sh`를 실행하고 다시 만든 파일을 함께
+  커밋합니다. npm·번들러는 쓰지 않습니다. `scripts/`는 릴리스 압축 파일에 들어가지 않습니다.
 
 ## Acknowledgments
 
