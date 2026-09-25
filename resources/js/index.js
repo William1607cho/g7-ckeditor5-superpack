@@ -135,6 +135,11 @@
     return (typeof r === 'string' && r !== full) ? r : fallback;
   }
 
+  /** el 이 CKEditor 편집 영역(본문·댓글 편집기) 안이면 true. 편집 영역도 `.ck-content` 라 방문자 스캔에서 뺄 때 쓴다. */
+  function isEditingArea(el) {
+    return !!(el && el.closest && el.closest('.ck-editor__editable, .ck-editor'));
+  }
+
   /* ================================================================ *
    *  SNS 임베드
    * ================================================================ */
@@ -776,7 +781,7 @@
 
   /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
   function editorInstanceNear(container) {
-    var scopes = [container, container.parentElement, container.nextElementSibling, document];
+    var scopes = [container, container.parentElement, container.nextElementSibling];
     for (var i = 0; i < scopes.length; i++) {
       var sc = scopes[i];
       if (!sc || !sc.querySelectorAll) continue;
@@ -1069,8 +1074,8 @@
    *  이번엔 시도하지 않는다 — 바이너리가 없으면 아무 것도 하지 않고 CKEditor5
    *  기본 동작에 맡긴다.
    *
-   *  컨테이너 셀렉터(`scanEditors`)가 이미 댓글 에디터(`g7ce-wrapper`)를
-   *  구조적으로 배제하므로 게시글 본문 편집기에만 적용된다(별도 스코프 코드 불요).
+   *  게시글 본문 편집기에만 적용한다. 댓글 에디터(`g7ce-wrapper` 안)는
+   *  attachPasteImageHandlerTo 에서 명시적으로 건너뛴다(업로드 경로가 없음).
    */
 
   var pasteImageRoots = []; // [{ domRoot, editor }]
@@ -1172,6 +1177,7 @@
     var domRoot;
     try { domRoot = editor.editing.view.getDomRoot(); } catch (e) { return; }
     if (!domRoot) return;
+    if (domRoot.closest('.g7ce-wrapper')) return; // 댓글 편집기는 이미지 업로드 경로가 없다
     container.__ck5spPasteImage = true;
     pasteImageRoots.push({ domRoot: domRoot, editor: editor });
     ensurePasteImageListener();
@@ -1512,6 +1518,8 @@
     for (var i = 0; i < containers.length; i++) {
       // 에디터가 실제로 붙었는지 확인 (editable 존재)
       var cont = containers[i];
+      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
+      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
       if (!editorInstanceNear(cont)) continue;
       attachUploaderTo(cont);
       attachPasteImageHandlerTo(cont);
@@ -2182,6 +2190,7 @@
 
     for (var c = 0; c < contents.length; c++) {
       var scope = contents[c];
+      if (isEditingArea(scope)) continue; // 편집 영역은 방문자 변환 대상이 아니다
 
       /* ---- -1) 마크다운 문법 → 실제 서식 (다른 모든 패스보다 먼저) ---- */
       // 링크가 실제 <a> 가 된 다음에 SNS/OG 카드 승격이 걸리도록 순서상 맨 앞.

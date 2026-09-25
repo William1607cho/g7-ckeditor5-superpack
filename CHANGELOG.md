@@ -79,6 +79,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1.15 times the body size, bold, with their own line height and spacing. Sizes set
   inline with the font-size tool still win, and Markdown headings keep their own
   styles.
+- **The post editor no longer runs the visitor-side link processing.** Bare links in
+  the editor were being marked for SNS embeds, link cards and video, and each one
+  fired a link-preview request while you wrote. Editing areas are now skipped.
+- **Only one video upload bar per post editor.** CKEditor's `ckeditor5-*` style and
+  script tags in `<head>` were taken for editor containers, which put extra upload
+  bars inside `<head>`. Only containers that actually hold an editor are used now.
+- **Image pasting is no longer intercepted in the comment box.** The comment editor
+  has no image upload, but pasted images were caught and then dropped. The
+  paste handler and upload timeout guard are now attached to the post editor only.
 
 ### Internal
 

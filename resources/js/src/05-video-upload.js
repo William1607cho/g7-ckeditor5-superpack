@@ -69,7 +69,7 @@
 
   /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
   function editorInstanceNear(container) {
-    var scopes = [container, container.parentElement, container.nextElementSibling, document];
+    var scopes = [container, container.parentElement, container.nextElementSibling];
     for (var i = 0; i < scopes.length; i++) {
       var sc = scopes[i];
       if (!sc || !sc.querySelectorAll) continue;

@@ -135,3 +135,8 @@
     return (typeof r === 'string' && r !== full) ? r : fallback;
   }
 
+  /** el 이 CKEditor 편집 영역(본문·댓글 편집기) 안이면 true. 편집 영역도 `.ck-content` 라 방문자 스캔에서 뺄 때 쓴다. */
+  function isEditingArea(el) {
+    return !!(el && el.closest && el.closest('.ck-editor__editable, .ck-editor'));
+  }
+

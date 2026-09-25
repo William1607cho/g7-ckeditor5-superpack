@@ -20,8 +20,8 @@
    *  이번엔 시도하지 않는다 — 바이너리가 없으면 아무 것도 하지 않고 CKEditor5
    *  기본 동작에 맡긴다.
    *
-   *  컨테이너 셀렉터(`scanEditors`)가 이미 댓글 에디터(`g7ce-wrapper`)를
-   *  구조적으로 배제하므로 게시글 본문 편집기에만 적용된다(별도 스코프 코드 불요).
+   *  게시글 본문 편집기에만 적용한다. 댓글 에디터(`g7ce-wrapper` 안)는
+   *  attachPasteImageHandlerTo 에서 명시적으로 건너뛴다(업로드 경로가 없음).
    */
 
   var pasteImageRoots = []; // [{ domRoot, editor }]
@@ -123,6 +123,7 @@
     var domRoot;
     try { domRoot = editor.editing.view.getDomRoot(); } catch (e) { return; }
     if (!domRoot) return;
+    if (domRoot.closest('.g7ce-wrapper')) return; // 댓글 편집기는 이미지 업로드 경로가 없다
     container.__ck5spPasteImage = true;
     pasteImageRoots.push({ domRoot: domRoot, editor: editor });
     ensurePasteImageListener();

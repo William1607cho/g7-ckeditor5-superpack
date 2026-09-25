@@ -110,6 +110,8 @@
     for (var i = 0; i < containers.length; i++) {
       // 에디터가 실제로 붙었는지 확인 (editable 존재)
       var cont = containers[i];
+      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
+      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
       if (!editorInstanceNear(cont)) continue;
       attachUploaderTo(cont);
       attachPasteImageHandlerTo(cont);

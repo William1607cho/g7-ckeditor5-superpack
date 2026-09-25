@@ -19,6 +19,7 @@
 
     for (var c = 0; c < contents.length; c++) {
       var scope = contents[c];
+      if (isEditingArea(scope)) continue; // 편집 영역은 방문자 변환 대상이 아니다
 
       /* ---- -1) 마크다운 문법 → 실제 서식 (다른 모든 패스보다 먼저) ---- */
       // 링크가 실제 <a> 가 된 다음에 SNS/OG 카드 승격이 걸리도록 순서상 맨 앞.
