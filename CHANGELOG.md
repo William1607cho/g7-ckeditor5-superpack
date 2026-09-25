@@ -5,6 +5,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **The plugin's routes no longer share a rate-limit counter with the rest of the
+  site.** Before, they used Laravel's unnamed `throttle:N,1`. That key is the member
+  id or the visitor IP, with no route in it. So every public Gnuboard7 API (board
+  lists, menus, widgets at 600/minute) counted against the same number. A visitor
+  who had just browsed a few pages could hit the link-preview limit of 30 on the
+  first card, and the link stayed a plain link.
+  - Each route group now has its own named limiter. The key is `user:<id>` for a
+    signed-in member and `ip:<address>` otherwise.
+
+    | Limiter | Routes | Per minute |
+    |---|---|---|
+    | `g7-ckeditor5-superpack.link-preview` | `GET link-preview` | 60 (was 30) |
+    | `g7-ckeditor5-superpack.video-session` | `POST video/upload/init`, `POST video/upload/complete` | 60 |
+    | `g7-ckeditor5-superpack.video-chunk` | `POST video/upload/chunk` | 1200 |
+    | `g7-ckeditor5-superpack.video-meta` | `POST video/meta` | 120 |
+    | `g7-ckeditor5-superpack.video-serve` | `GET video/{id}` | 600 |
+
+  - Over the limit, the response is the same `429` as before.
+  - The limiters are registered when the plugin boots, so they also work with a
+    route cache.
+  - The limit on real outbound link-preview fetches is unchanged (120 per minute
+    site-wide, 20 per minute per host).
+- **Behind a reverse proxy**, set `TRUSTED_PROXIES` in the core `.env`. Otherwise
+  every visitor is seen as the proxy's address and shares one link-preview
+  allowance. Check it with `php artisan trusted-proxy:status`.
+
 ## [1.4.0] - 2026-09-17
 
 ### Security

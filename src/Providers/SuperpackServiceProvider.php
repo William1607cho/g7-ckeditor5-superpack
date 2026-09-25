@@ -8,12 +8,15 @@ use Plugins\G7\Ckeditor5\Superpack\Console\Commands\PruneVideosCommand;
 use Plugins\G7\Ckeditor5\Superpack\Contracts\LinkPreviewFetcher;
 use Plugins\G7\Ckeditor5\Superpack\Services\CurlLinkPreviewFetcher;
 use Plugins\G7\Ckeditor5\Superpack\Services\VideoUploadService;
+use Plugins\G7\Ckeditor5\Superpack\Support\SuperpackRateLimiters;
 
 /**
  * CKEditor 5 슈퍼팩 서비스 프로바이더.
  *
  * - `VideoUploadService` 에 플러그인 격리 `StorageInterface` 자동 주입
  *   (BasePluginServiceProvider 표준: `plugins` 디스크의 `g7-ckeditor5-superpack/` 하위).
+ * - 라우트가 쓰는 이름 있는 제한기 등록 (`SuperpackRateLimiters`). 이 프로바이더는
+ *   `PluginRouteServiceProvider` 보다 먼저 부팅되므로 라우트보다 앞선다.
  * - 링크 프리뷰 수신기 `LinkPreviewFetcher` → `CurlLinkPreviewFetcher` 바인딩
  *   (테스트는 `app()->instance()` 로 대체 구현을 넣는다).
  * - 콘솔 실행 시 정리 커맨드 등록 (미참조 동영상/만료 세션, 링크 프리뷰 캐시).
@@ -33,11 +36,13 @@ class SuperpackServiceProvider extends BasePluginServiceProvider
     ];
 
     /**
-     * 플러그인 부팅 — 수신기 바인딩, 콘솔 실행 시 정리 커맨드 등록.
+     * 플러그인 부팅 — 제한기 등록, 수신기 바인딩, 콘솔 실행 시 정리 커맨드 등록.
      */
     public function boot(): void
     {
         parent::boot();
+
+        SuperpackRateLimiters::register();
 
         $this->app->bindIf(LinkPreviewFetcher::class, CurlLinkPreviewFetcher::class);
 

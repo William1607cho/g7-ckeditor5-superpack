@@ -136,7 +136,7 @@ Any bare external link that is not an SNS embed target becomes a card:
 - **Fallback** — the original link is kept as-is (long URLs wrap via CSS).
 
 Metadata is fetched server-side by `GET /api/plugins/g7-ckeditor5-superpack/link-preview`
-(public, 30 requests/minute per IP) and cached in `g7_superpack_link_previews`.
+(public, 60 requests/minute per IP, counted separately from other APIs) and cached in `g7_superpack_link_previews`.
 
 **Server-side safeguards (1.4.0):**
 

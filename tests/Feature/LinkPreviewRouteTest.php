@@ -8,12 +8,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Plugins\G7\Ckeditor5\Superpack\Http\Requests\LinkPreviewRequest;
+use Plugins\G7\Ckeditor5\Superpack\Support\SuperpackRateLimiters;
 use Plugins\G7\Ckeditor5\Superpack\Tests\PluginTestCase;
 
 /**
- * 링크 프리뷰 라우트·요청 검증 (1.4.0)
+ * 링크 프리뷰 라우트·요청 검증 (1.4.0, 제한기 1.5.0)
  *
- * - 라우트 throttle 은 IP 당 분당 30회
+ * - 라우트 throttle 은 이름 있는 제한기(IP 당 분당 60회, NamedRateLimitersTest)
  * - 요청 검증(코어 규칙)이 걸러내는 입력 — mapped·CGNAT 는 코어 규칙이 통과시키므로
  *   서비스 테스트(LinkPreviewServiceTest)에서 확인한다.
  */
@@ -21,7 +22,7 @@ class LinkPreviewRouteTest extends PluginTestCase
 {
     private const URI = '/api/plugins/g7-ckeditor5-superpack/link-preview';
 
-    public function test_route_throttle_is_30_per_minute(): void
+    public function test_route_uses_named_limiter(): void
     {
         try {
             $route = app('router')->getRoutes()->match(Request::create(self::URI, 'GET'));
@@ -31,8 +32,8 @@ class LinkPreviewRouteTest extends PluginTestCase
 
         $middleware = $route->gatherMiddleware();
 
-        $this->assertContains('throttle:30,1', $middleware);
-        $this->assertNotContains('throttle:60,1', $middleware);
+        $this->assertContains('throttle:'.SuperpackRateLimiters::LINK_PREVIEW, $middleware);
+        $this->assertEmpty(preg_grep('/^throttle:\d+,\d+$/', $middleware));
         $this->assertSame(['GET', 'HEAD'], $route->methods());
     }
 
