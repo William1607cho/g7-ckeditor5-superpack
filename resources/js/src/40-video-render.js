@@ -3,8 +3,6 @@
    * ================================================================ */
 
   var VIDEO_STYLE_ID = 'ck5-video-style';
-  // public_id 만 잡으면 되므로 상대/절대 URL 모두 매칭. 링크 텍스트는 상관 안 함.
-  var VIDEO_URL_RE = /\/api\/plugins\/g7-ckeditor5-superpack\/video\/([a-f0-9]{32})\b/i;
 
   /** URL(상대/절대 무관) 이 이 슈퍼팩의 동영상 서빙 엔드포인트면 public_id, 아니면 null */
   function videoIdOf(url) {

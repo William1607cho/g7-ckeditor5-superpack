@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Internal
+
+- The front-end pieces in `resources/js/src/` are renumbered into bands (`00`
+  head, `01`–`09` core, `10`–`79` features, `90` boot, `99` tail), and shared
+  helpers move into core pieces. Code is only moved; behavior is unchanged.
+
 ## [1.5.0] - 2026-09-25
 
 ### Added

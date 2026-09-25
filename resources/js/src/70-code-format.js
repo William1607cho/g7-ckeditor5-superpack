@@ -22,12 +22,6 @@
     try { console.warn('[' + IDENTIFIER + '] code formatting disabled: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
   }
 
-  /** 설정 `codeformat_enabled`(기본 켜짐)를 에디터 생성 시점에 읽는다. */
-  function codeFormatEnabled() {
-    var s = (window.G7Config && window.G7Config.plugins && window.G7Config.plugins[IDENTIFIER]) || {};
-    return asBool(s.codeformat_enabled, true);
-  }
-
   /** 툴바 항목 복사본에 name 을 after 바로 뒤(없으면 끝)에 넣는다. 이미 있으면 그대로. */
   function insertToolbarItem(items, name, after) {
     if (items.indexOf(name) !== -1) return;

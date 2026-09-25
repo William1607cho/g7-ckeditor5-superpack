@@ -2,26 +2,9 @@
    *  링크 카드
    * ================================================================ */
 
-  function isBareUrlLink(a) {
-    var href = a.getAttribute('href') || '';
-    if (!/^https?:\/\//i.test(href)) return false;
-    var text = (a.textContent || '').trim();
-    if (!/^https?:\/\//i.test(text)) return false;
-    var norm = function (u) { return u.replace(/\/+$/, '').toLowerCase(); };
-    return norm(text) === norm(href);
-  }
-
-  /** block(주로 <p>)의 유일한 의미 있는 자식이 맨URL 링크면 그 링크를 반환 */
-  function soleLinkOf(block) {
-    if ((block.textContent || '').trim() === '') return null;
-    var els = [];
-    for (var i = 0; i < block.children.length; i++) els.push(block.children[i]);
-    if (els.length !== 1) return null;
-    var only = els[0];
-    if (only.tagName !== 'A') return null;
-    if ((block.textContent || '').trim() !== (only.textContent || '').trim()) return null;
-    return isBareUrlLink(only) ? only : null;
-  }
+  var API = '/api/plugins/' + IDENTIFIER + '/link-preview';
+  var LINKCARD_STYLE_ID = 'ck5-linkcard-style';
+  var MAX_INFLIGHT = 3;
 
   function cardHtml(url, p, cfg) {
     var title = (p.title || p.domain || url).trim();

@@ -7,13 +7,13 @@
   var VIDEO_CHUNK = '/api/plugins/' + IDENTIFIER + '/video/upload/chunk';
   var VIDEO_COMPLETE = '/api/plugins/' + IDENTIFIER + '/video/upload/complete';
 
-  function authToken() {
-    try {
-      if (window.G7Core && window.G7Core.apiClient && window.G7Core.apiClient.getToken) {
-        return window.G7Core.apiClient.getToken() || '';
-      }
-    } catch (e) {}
-    try { return localStorage.getItem('auth_token') || ''; } catch (e) { return ''; }
+  /** 설정에 따른 허용 동영상 확장자 목록 (소문자, .mp4 항상 포함) */
+  function allowedVideoExts(cfg) {
+    var e = ['mp4'];
+    if (cfg.videoAllowMov) e.push('mov');
+    if (cfg.videoAllowWebm) e.push('webm');
+    if (cfg.videoAllowM4v) e.push('m4v');
+    return e;
   }
 
   function injectUploadStyle() {
@@ -65,20 +65,6 @@
       + 'html.dark ' + VBOX + '{background:#1e293b;border-color:#334155;color:#e2e8f0!important;}'
       + 'html.dark ' + VBOX + '::before{color:#60a5fa;}';
     document.head.appendChild(el);
-  }
-
-  /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
-  function editorInstanceNear(container) {
-    var scopes = [container, container.parentElement, container.nextElementSibling];
-    for (var i = 0; i < scopes.length; i++) {
-      var sc = scopes[i];
-      if (!sc || !sc.querySelectorAll) continue;
-      var eds = sc.querySelectorAll('.ck-editor__editable_inline, .ck-editor__editable');
-      for (var j = 0; j < eds.length; j++) {
-        if (eds[j].ckeditorInstance) return eds[j].ckeditorInstance;
-      }
-    }
-    return null;
   }
 
   /** URL 에 size 힌트를 얹는다 ('md' 는 파라미터 없음 = 기본). GHS 는 href 쿼리는 보존함(실측). */
