@@ -197,6 +197,21 @@
                                 "children": [
                                     { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.imagepaste" }
                                 ]
+                            },
+                            {
+                                "id": "tab_btn_codeformat",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'codeformat' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "codeformat" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.codeformat" }
+                                ]
                             }
                         ]
                     },
@@ -634,6 +649,31 @@
                     },
 
                     {
+                        "id": "panel_codeformat",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'codeformat'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.codeformat.intro" },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "codeformat_enabled", "type": "checkbox", "name": "codeformat_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "codeformat_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.codeformat_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.codeformat_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
                         "id": "footer_buttons",
                         "type": "basic",
                         "name": "Div",
@@ -726,6 +766,7 @@
         "editor_line_height": { "type": "enum", "options": ["1.2", "1.4", "1.6", "1.8", "2.0"], "default": "1.6" },
         "editor_apply_to_comments": { "type": "boolean", "default": false },
         "imagepaste_enabled": { "type": "boolean", "default": true },
-        "imagepaste_webp_enabled": { "type": "boolean", "default": true }
+        "imagepaste_webp_enabled": { "type": "boolean", "default": true },
+        "codeformat_enabled": { "type": "boolean", "default": true }
     }
 }

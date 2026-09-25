@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Code formatting buttons in the post editor.** The post editor toolbar gets
+  *Code* (after *Strikethrough*) and *Code block* (after *Block quote*), using the
+  Code and CodeBlock plugins that ship in the installed CKEditor build.
+  `sirsoft-ckeditor5` is not modified, and the comment editor is left alone. Code
+  is saved as `<code>` and `<pre><code class="language-plaintext">`, so wiki
+  links and Markdown marks inside it stay as typed. No autoformat or shortcuts are
+  added. A new *Code formatting* settings tab turns the buttons off (on by
+  default); saved code is always styled for display (smaller monospace, soft
+  background, sideways scroll for long lines, dark-mode colors).
+
 ### Changed
 
 - **The plugin's routes no longer share a rate-limit counter with the rest of the

@@ -39,7 +39,8 @@
             "video": "Local video upload",
             "md": "Markdown auto-convert",
             "editorstyle": "Editor style",
-            "imagepaste": "Image paste"
+            "imagepaste": "Image paste",
+            "codeformat": "Code formatting"
         },
         "sns": {
             "intro": "When a YouTube, X (Twitter), Instagram or TikTok link is pasted on its own line, it is shown as a playable embed on the visitor-facing page.",
@@ -174,6 +175,10 @@
             "imagepaste_webp_enabled": {
                 "label": "Auto-convert uploaded PNG images to WebP",
                 "hint": "To offset browsers re-encoding pasted images as PNG (which inflates file size), PNG uploads are re-compressed to WebP on the server (lossless first, falling back to high-quality lossy compression if needed, automatically keeping the original if the result would be larger). This works independently of the clipboard-paste setting above — it also applies to PNGs uploaded via the regular file picker."
+            },
+            "codeformat_enabled": {
+                "label": "Enable code formatting buttons",
+                "hint": "When on, the post editor toolbar gets inline code and code block buttons. When off, only the buttons go away; code in existing posts still displays as before."
             }
         },
         "md": {
@@ -186,6 +191,9 @@
         },
         "imagepaste": {
             "intro": "Controls what happens when an image is pasted into the post body editor. The two settings below are independent and can be toggled separately."
+        },
+        "codeformat": {
+            "intro": "Adds inline code and code block (plain text) buttons to the post editor. Text inside code is shown as typed, without being turned into formatting or wiki links. Saved code is always styled for display, whatever this setting is."
         }
     }
 }

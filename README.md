@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/github/v/release/William1607cho/g7-ckeditor5-superpack?sort=semver)](https://github.com/William1607cho/g7-ckeditor5-superpack/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds five render-time
+A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds six render-time
 enhancements to posts written with the **`sirsoft-ckeditor5`** editor — **without
 modifying the editor itself**:
 
@@ -18,6 +18,8 @@ modifying the editor itself**:
    viewed. The stored text is left byte-for-byte unchanged.
 5. **Editor style** — a site-wide base font size and line height for the post body,
    optionally extended to comments too.
+6. **Code formatting** — *Code* and *Code block* buttons in the post editor toolbar.
+   Code is saved as real `<code>` / `<pre>`, so its text is shown as typed.
 
 In every case the stored content is just plain `<a href>` links and the original
 text (editor style is the exception — it's a CSS rule, not a content transform).
@@ -44,8 +46,9 @@ admin and front page. On the visitor-facing page it scans each `.ck-content` blo
   endpoint with SSRF defenses and cached in a table).
 
 In the write screen it injects the *Upload video* button and a media-library strip
-above the editor using `element.ckeditorInstance` — it never registers a CKEditor
-plugin, so `sirsoft-ckeditor5` stays untouched.
+above the editor using `element.ckeditorInstance`. For code formatting it adds the
+build's own Code / CodeBlock plugins to the post editor's config at creation time
+(by wrapping `ClassicEditor.create`), so `sirsoft-ckeditor5` stays untouched.
 
 Turning a feature off in the settings makes the script skip that scan entirely.
 
@@ -104,7 +107,7 @@ kept identical and both are committed.
 ## Usage
 
 Open **Admin → Plugins → CKEditor 5 Superpack → Settings**
-(`/admin/plugins/g7-ckeditor5-superpack/settings`). Six tabs, one per feature.
+(`/admin/plugins/g7-ckeditor5-superpack/settings`). Seven tabs, one per feature.
 
 ### 1. SNS embeds
 
@@ -305,10 +308,27 @@ blocked until it finishes, using CKEditor 5's standard `PendingActions` plugin. 
 closes a pre-existing gap that also affected plain screenshot pasting — submitting
 mid-upload used to save the post with an empty `<img>`.
 
+### 7. Code formatting
+
+Adds two buttons to the **post** editor toolbar (not the comment editor): **Code**
+right after *Strikethrough*, and **Code block** right after *Block quote*. They use
+the Code and CodeBlock plugins that already ship in the installed CKEditor 5 build;
+`sirsoft-ckeditor5` is not modified, and nothing else about typing changes (no
+autoformat, no new shortcuts).
+
+- Inline code is saved as `<code>…</code>`; a code block as
+  `<pre><code class="language-plaintext">…</code></pre>` (plain text only, no
+  syntax highlighting).
+- Text inside code is shown as typed — Markdown marks are not converted there, and
+  wiki plugins that skip `<code>` / `<pre>` (such as `g7-light-wiki`) leave `[[…]]`
+  alone.
+- Saved code is always styled for display (smaller monospace, soft background, long
+  lines scroll sideways, a dark-mode palette), even when the buttons are turned off.
+
 ## Settings screen
 
 **Admin → Plugins → CKEditor 5 Superpack → Settings** shows a short description line
-and six tabs, one per feature. Each tab has a master on/off switch at the top
+and seven tabs, one per feature. Each tab has a master on/off switch at the top
 followed by that feature's detailed options:
 
 - **SNS embeds** — per-platform on/off (YouTube · X · Instagram · TikTok) and the
@@ -324,6 +344,7 @@ followed by that feature's detailed options:
   toggle.
 - **Image paste** — clipboard auto-upload on/off, PNG→WebP conversion on/off
   (independent of each other).
+- **Code formatting** — show the Code / Code block buttons on/off (on by default).
 
 ## Known limitations
 
@@ -351,7 +372,9 @@ followed by that feature's detailed options:
 
 - The front-end source lives in `resources/js/src/` as numbered pieces
   (`01-head.js` … `12-scan-boot.js`). They are consecutive slices of one IIFE, so a
-  piece is not a complete script on its own.
+  piece is not a complete script on its own. `12-scan-boot.js` closes the IIFE, so a
+  new piece goes between existing ones as the previous number plus a lowercase letter
+  (e.g. `09a-code-format.js`); names are sorted with `LC_ALL=C`.
 - `scripts/build-js.sh` joins the pieces in name order and writes the result to both
   `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
   identical). `scripts/build-js.sh --check` writes nothing and exits `1` if either
@@ -362,7 +385,7 @@ followed by that feature's detailed options:
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
-**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 6개, 기능별로 하나씩.
+**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 7개, 기능별로 하나씩.
 
 - **SNS 임베드** — 본문에 YouTube·X·Instagram·TikTok 링크를 **한 줄에 단독으로** 붙여넣으면
   방문자 화면에서 임베드로 표시됩니다. 임베드 아래에는 항상 원문 링크 버튼이 남습니다.
@@ -413,6 +436,12 @@ followed by that feature's detailed options:
   - 두 체크박스와 무관하게 함께 딸려온 수정: 이미지 업로드가 끝나기 전에 "글 작성 완료"를
     누르면 본문 이미지가 빈칸으로 저장되던 기존 결함을 `PendingActions` 연동으로 막았습니다
     (스크린샷 붙여넣기 경로에도 소급 적용).
+- **코드 서식** — 게시글 본문 에디터 툴바에 **코드**(취소선 뒤)·**코드 블록**(인용 뒤) 버튼을
+  더합니다(댓글 에디터는 대상 아님). 설치된 CKEditor 빌드의 Code·CodeBlock 플러그인을 쓰며
+  `sirsoft-ckeditor5`는 고치지 않습니다. 자동 변환·단축키는 넣지 않습니다. 인라인 코드는
+  `<code>`, 코드 블록은 `<pre><code class="language-plaintext">`(일반 텍스트, 문법 강조 없음)로
+  저장되어, 코드 안의 글자는 마크다운 변환이나 위키 링크(`[[…]]`)로 바뀌지 않고 그대로 보입니다.
+  설정: 버튼 온/오프(기본 ON). 끄면 버튼만 사라지고 이미 저장된 코드의 표시 스타일은 그대로입니다.
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
 
@@ -420,6 +449,8 @@ followed by that feature's detailed options:
 
 - 프런트 소스는 `resources/js/src/`에 번호 붙은 조각(`01-head.js` … `12-scan-boot.js`)으로
   있습니다. 조각은 하나의 IIFE를 이어서 자른 것이라, 조각 하나만으로는 완결된 스크립트가 아닙니다.
+  `12-scan-boot.js`가 IIFE를 닫으므로 새 조각은 기존 번호 사이에 "앞 번호 + 소문자"로 넣습니다
+  (예: `09a-code-format.js`). 이름 정렬은 `LC_ALL=C` 기준입니다.
 - `scripts/build-js.sh`가 조각을 이름 순으로 이어 붙여 `dist/js/plugin.iife.js`와
   `resources/js/index.js` 두 곳에 씁니다(두 파일은 항상 같습니다). `--check`를 붙이면 파일을
   쓰지 않고, 어느 한쪽이라도 결합 결과와 다르면 `1`로 끝납니다.
