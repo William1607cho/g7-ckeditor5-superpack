@@ -3,7 +3,7 @@
 [![Release](https://img.shields.io/github/v/release/William1607cho/g7-ckeditor5-superpack?sort=semver)](https://github.com/William1607cho/g7-ckeditor5-superpack/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds five render-time
+A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds seven
 enhancements to posts written with the **`sirsoft-ckeditor5`** editor — **without
 modifying the editor itself**:
 
@@ -16,14 +16,21 @@ modifying the editor itself**:
 4. **Markdown auto-convert** — literal markdown marks (`##`, `**bold**`, `- item`,
    pasted from an AI assistant, etc.) are turned into real formatting when the post is
    viewed. The stored text is left byte-for-byte unchanged.
-5. **Editor style** — a site-wide base font size and line height for the post body,
-   optionally extended to comments too.
+5. **Editor style** — a site-wide base font size and line height for the post body
+   (with sized toolbar headings), optionally extended to comments and the comment box.
+6. **Image paste** — an image copied from another site and pasted into the post body
+   is uploaded to this site, and uploaded PNGs can be re-compressed to WebP.
+7. **Code formatting** — *Code* and *Code block* buttons in the post editor toolbar.
+   Code is saved as real `<code>` / `<pre>`, so its text is shown as typed. Code
+   blocks in a viewed post get a copy button.
 
-In every case the stored content is just plain `<a href>` links and the original
-text (editor style is the exception — it's a CSS rule, not a content transform).
-All conversion happens on the visitor-facing page (and, for the editor button
-and media library, in the write screen) via one globally-loaded script. Each feature
-has its own on/off switch and detailed options in the admin screen.
+For embeds, link cards, video and Markdown the stored content is just plain
+`<a href>` links and the original text; the conversion happens on the
+visitor-facing page. Editor style is a CSS rule, image paste uploads through the
+editor's own upload path, and code formatting stores standard `<code>` / `<pre>`.
+Everything runs from one globally-loaded script (plus, for the editor button and
+media library, in the write screen). Each feature has its own on/off switch and
+detailed options in the admin screen.
 
 한국어 사용 안내는 아래 [사용법 (한국어)](#사용법-한국어) 절을 참고하세요.
 
@@ -44,8 +51,9 @@ admin and front page. On the visitor-facing page it scans each `.ck-content` blo
   endpoint with SSRF defenses and cached in a table).
 
 In the write screen it injects the *Upload video* button and a media-library strip
-above the editor using `element.ckeditorInstance` — it never registers a CKEditor
-plugin, so `sirsoft-ckeditor5` stays untouched.
+above the editor using `element.ckeditorInstance`. For code formatting it adds the
+build's own Code / CodeBlock plugins to the post editor's config at creation time
+(by wrapping `ClassicEditor.create`), so `sirsoft-ckeditor5` stays untouched.
 
 Turning a feature off in the settings makes the script skip that scan entirely.
 
@@ -73,8 +81,8 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 cd /path/to/gnuboard7/plugins
 
 # a release tag (recommended)
-curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.0.0.tar.gz | tar xz
-mv g7-ckeditor5-superpack-1.0.0 g7-ckeditor5-superpack
+curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.5.0.tar.gz | tar xz
+mv g7-ckeditor5-superpack-1.5.0 g7-ckeditor5-superpack
 
 # ...or the latest main
 git clone https://github.com/William1607cho/g7-ckeditor5-superpack.git
@@ -104,7 +112,7 @@ kept identical and both are committed.
 ## Usage
 
 Open **Admin → Plugins → CKEditor 5 Superpack → Settings**
-(`/admin/plugins/g7-ckeditor5-superpack/settings`). Six tabs, one per feature.
+(`/admin/plugins/g7-ckeditor5-superpack/settings`). Seven tabs, one per feature.
 
 ### 1. SNS embeds
 
@@ -132,11 +140,18 @@ Any bare external link that is not an SNS embed target becomes a card:
 - **Full card** — thumbnail + title + summary + domain (when OpenGraph metadata is
   available).
 - **Minimal card** — favicon + title + domain (only `<title>` available — e.g. a
-  Cloudflare challenge page).
+  Cloudflare challenge page). The favicon is shown only once it has loaded, so a
+  blocked icon leaves the card as first drawn.
 - **Fallback** — the original link is kept as-is (long URLs wrap via CSS).
 
 Metadata is fetched server-side by `GET /api/plugins/g7-ckeditor5-superpack/link-preview`
-(public, 30 requests/minute per IP) and cached in `g7_superpack_link_previews`.
+(public, 60 requests/minute per IP on its own named limiter, counted separately from
+other APIs) and cached in `g7_superpack_link_previews`. If that request gets a `429`,
+the page retries it once after `Retry-After` (up to 10 s; 2 s when the header is
+missing), and cards for the same address share one request. Behind a reverse proxy,
+set `TRUSTED_PROXIES` in the core `.env` so each visitor is counted by their own
+address. Links inside the editor are left as links; cards appear only on the
+visitor page.
 
 **Server-side safeguards (1.4.0):**
 
@@ -257,13 +272,20 @@ headings on, lists off).
 Sets a site-wide base font size (12–28px) and line height (1.2 / 1.4 / 1.6 / 1.8 /
 2.0) for the post body. Off by default; when on, it applies to the writing screen
 *and* the published post — including already-published posts, since it's a CSS rule
-targeting the render class rather than a content transform.
+targeting the render class rather than a content transform. In the editor the style
+stays in place while you type and when the editor gains or loses focus.
+
+With it on, toolbar headings (Heading 1 / 2 / 3, saved as `h2` / `h3` / `h4`) get
+1.5 / 1.3 / 1.15 times the body size, bold, with their own line height and spacing —
+the theme otherwise resets heading sizes to the body size. A size set inline with the
+font-size tool still wins; Markdown headings keep their own styles.
 
 Comments don't share the post body's `.ck-content`/`prose` rendering — they're
 rendered as plain text by sirsoft-board and promoted to HTML client-side by
 [`g7-comment-editor`](https://github.com/William1607cho/g7-comment-editor) when
 formatting is present. **Also apply to comments** extends the same font size / line
-height to the comment paragraph directly, so it's off by default and opt-in.
+height to the comment paragraph and to the comment box while writing (toolbar
+headings included in the comment box); it's off by default and opt-in.
 
 **Settings:** master on/off · base font size (px) · line height (multiplier) ·
 also-apply-to-comments toggle.
@@ -284,7 +306,8 @@ Two independent toggles, both on by default; turning one off does not affect the
   disables the interception (capture listener, the submit-lock guard below, upload)
   and falls back to `sirsoft-ckeditor5`'s own behavior — pasting a real screenshot
   still works either way, since that already goes through CKEditor 5's native paste
-  handler independently of this toggle.
+  handler independently of this toggle. The comment box is not affected (the comment
+  editor has no image upload).
 - **Auto-convert uploaded PNG images to WebP** — mitigates browsers re-encoding
   pasted images as PNG (which inflates file size) by re-compressing PNG uploads to
   WebP server-side: lossless first, falling back to high-quality lossy compression
@@ -305,10 +328,32 @@ blocked until it finishes, using CKEditor 5's standard `PendingActions` plugin. 
 closes a pre-existing gap that also affected plain screenshot pasting — submitting
 mid-upload used to save the post with an empty `<img>`.
 
+### 7. Code formatting
+
+Adds two buttons to the **post** editor toolbar (not the comment editor): **Code**
+right after *Strikethrough*, and **Code block** right after *Block quote*. They use
+the Code and CodeBlock plugins that already ship in the installed CKEditor 5 build;
+`sirsoft-ckeditor5` is not modified, and nothing else about typing changes (no
+autoformat, no new shortcuts).
+
+- Inline code is saved as `<code>…</code>`; a code block as
+  `<pre><code class="language-plaintext">…</code></pre>` (plain text only, no
+  syntax highlighting).
+- Text inside code is shown as typed — Markdown marks are not converted there, and
+  wiki plugins that skip `<code>` / `<pre>` (such as `g7-light-wiki`) leave `[[…]]`
+  alone.
+- Saved code is always styled for display (smaller monospace, soft background, long
+  lines scroll sideways, a dark-mode palette), even when the buttons are turned off.
+- Every code block in a viewed post (toolbar code blocks and Markdown ```` ``` ````
+  blocks) gets a copy button in its top-right corner: half-transparent until hovered
+  or focused, it stays put while the block scrolls sideways, copies the code exactly
+  as shown and shows a check mark for 1.5 seconds. Inline code and the editors get
+  no button, it is hidden when printing, and it does not depend on the setting.
+
 ## Settings screen
 
 **Admin → Plugins → CKEditor 5 Superpack → Settings** shows a short description line
-and six tabs, one per feature. Each tab has a master on/off switch at the top
+and seven tabs, one per feature. Each tab has a master on/off switch at the top
 followed by that feature's detailed options:
 
 - **SNS embeds** — per-platform on/off (YouTube · X · Instagram · TikTok) and the
@@ -324,6 +369,7 @@ followed by that feature's detailed options:
   toggle.
 - **Image paste** — clipboard auto-upload on/off, PNG→WebP conversion on/off
   (independent of each other).
+- **Code formatting** — show the Code / Code block buttons on/off (on by default).
 
 ## Known limitations
 
@@ -346,10 +392,30 @@ followed by that feature's detailed options:
   link-preview request take longer than 8 s.
 - **Link cards: non-UTF-8 pages** (e.g. EUC-KR) are not converted. Invalid bytes
   are replaced, so titles from such pages can show replacement characters.
+- **Code blocks with a language class.** Plain text is the only code block language.
+  An existing `<pre><code class="language-…">` opened and saved again in the editor
+  keeps its class and also gets `language-plaintext`; the code text and its display
+  are unchanged.
+
+## Development
+
+- The front-end source lives in `resources/js/src/` as 14 numbered pieces, one per
+  feature area (`01-head.js` … `09a-code-format.js`, `09b-code-copy.js` …
+  `12-scan-boot.js`). They are consecutive slices of one IIFE, so a
+  piece is not a complete script on its own. `12-scan-boot.js` closes the IIFE, so a
+  new piece goes between existing ones as the previous number plus a lowercase letter
+  (e.g. `09a-code-format.js`); names are sorted with `LC_ALL=C`.
+- `scripts/build-js.sh` joins the pieces in name order and writes the result to both
+  `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
+  identical). `scripts/build-js.sh --check` writes nothing and exits `1` if either
+  file is out of date.
+- After editing a piece, always run `scripts/build-js.sh` and commit the rebuilt
+  files. No npm or bundler is involved. `scripts/` is not included in release
+  archives.
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
-**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 6개, 기능별로 하나씩.
+**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 7개, 기능별로 하나씩.
 
 - **SNS 임베드** — 본문에 YouTube·X·Instagram·TikTok 링크를 **한 줄에 단독으로** 붙여넣으면
   방문자 화면에서 임베드로 표시됩니다. 임베드 아래에는 항상 원문 링크 버튼이 남습니다.
@@ -357,6 +423,11 @@ followed by that feature's detailed options:
 - **외부 링크 카드화** — 임베드 대상이 아닌 일반 외부 링크를 대표이미지+제목+요약+도메인
   카드(또는 파비콘+제목+도메인 최소 카드)로 바꿉니다. 메타 취득은 서버가 대행하고 캐시합니다.
   설정: 전체 온/오프 · 최소 카드 온/오프 · 이미지 크기 · 성공/실패 캐시 보존기간.
+  최소 카드의 파비콘은 불러오기에 성공했을 때만 보입니다(막힌 아이콘 때문에 카드가 다시 그려지지 않음).
+  편집 화면 안의 링크는 링크 그대로 두고, 카드는 방문자 화면에서만 만듭니다.
+  요청 한도(1.5.0): 링크 프리뷰 API는 슈퍼팩 전용 제한기로 IP당 분당 60회이며, 다른 API와 따로 셉니다.
+  429를 받으면 `Retry-After`(10초 이하, 없으면 2초) 뒤 한 번 다시 요청하고, 같은 주소 카드는 요청을
+  함께 씁니다. 리버스 프록시 뒤라면 코어 `.env`의 `TRUSTED_PROXIES`를 설정해야 방문자별로 셉니다.
   서버 보호장치(1.4.0):
   - 내부망·CGNAT(Tailscale 등)·IPv4-mapped 주소와 숫자형 IP 표기를 매 홉마다 차단합니다.
   - 판정한 IP로 접속을 고정하고, 프록시 환경변수는 무시합니다.
@@ -377,9 +448,12 @@ followed by that feature's detailed options:
   요소별 온/오프. `#태그`(공백 없음)·`####`·단일 `- 문장`·`2024.`
   같은 것은 변환하지 않습니다.
 - **에디터 스타일** — 게시글 본문의 기본 글자크기(12~28px)·줄간격(1.2~2.0)을 사이트 전체에
-  일괄 적용합니다(기본 OFF). 이미 작성된 글에도 함께 적용됩니다. 댓글은 게시글 본문과 렌더링
-  경로가 달라(댓글은 텍스트로 저장되고 `g7-comment-editor` 가 클라이언트에서 서식을 승격) 기본
-  적용 대상이 아니며, "댓글에도 동일하게 적용" 옵션으로 opt-in 확장할 수 있습니다.
+  일괄 적용합니다(기본 OFF). 이미 작성된 글에도 함께 적용되고, 편집 중 포커스가 바뀌어도 유지됩니다.
+  켜져 있으면 툴바 제목(제목 1·2·3 = `h2`·`h3`·`h4`)이 본문의 1.5·1.3·1.15배, 굵게, 제목용 줄간격·
+  여백으로 보입니다(글자 크기 도구로 준 크기가 우선, 마크다운 제목은 자기 스타일 유지). 댓글은 게시글
+  본문과 렌더링 경로가 달라(댓글은 텍스트로 저장되고 `g7-comment-editor` 가 클라이언트에서 서식을
+  승격) 기본 적용 대상이 아니며, "댓글에도 동일하게 적용" 옵션을 켜면 방문자 화면의 댓글과 **댓글
+  입력창**에 함께 적용됩니다(옵션이 꺼져 있으면 댓글 입력창에도 적용되지 않음).
 - **이미지 복붙** — 서로 독립된 체크박스 2개(둘 다 기본 ON).
   - **클립보드 이미지 자동 업로드** — 타 사이트에서 이미지를 우클릭 복사/드래그해 본문
     에디터에 붙여넣으면(클립보드에 실제 이미지 바이너리가 있을 때) 기존 로컬 업로드
@@ -387,7 +461,8 @@ followed by that feature's detailed options:
     대신 재요청하는 방식이 아니라서 사이트별 CORS/핫링크 정책에 성공 여부가 좌우되지
     않습니다(과거 재호스팅 방식은 이 문제로 폐기됨 — `plugin.php`의 `Plugin` 클래스
     docblock 참고). 끄면 가로채기 전체가 비활성화되고 `sirsoft-ckeditor5` 기본 동작으로
-    돌아갑니다 — 스크린샷 붙여넣기는 이 설정과 무관하게 계속 동작합니다.
+    돌아갑니다 — 스크린샷 붙여넣기는 이 설정과 무관하게 계속 동작합니다. 댓글 입력창은 대상이
+    아닙니다(댓글 에디터에는 이미지 업로드가 없음).
   - **업로드 이미지 PNG→WebP 자동 변환** — 브라우저가 붙여넣은 이미지를 PNG로 재구성해
     용량이 커지는 문제를 완화하기 위해, 서버가 PNG를 WebP로 재압축합니다(무손실 우선 →
     이득이 적으면 고품질 손실 압축 폴백 → 그래도 원본보다 크면 자동으로 원본 유지).
@@ -400,8 +475,30 @@ followed by that feature's detailed options:
   - 두 체크박스와 무관하게 함께 딸려온 수정: 이미지 업로드가 끝나기 전에 "글 작성 완료"를
     누르면 본문 이미지가 빈칸으로 저장되던 기존 결함을 `PendingActions` 연동으로 막았습니다
     (스크린샷 붙여넣기 경로에도 소급 적용).
+- **코드 서식** — 게시글 본문 에디터 툴바에 **코드**(취소선 뒤)·**코드 블록**(인용 뒤) 버튼을
+  더합니다(댓글 에디터는 대상 아님). 설치된 CKEditor 빌드의 Code·CodeBlock 플러그인을 쓰며
+  `sirsoft-ckeditor5`는 고치지 않습니다. 자동 변환·단축키는 넣지 않습니다. 인라인 코드는
+  `<code>`, 코드 블록은 `<pre><code class="language-plaintext">`(일반 텍스트, 문법 강조 없음)로
+  저장되어, 코드 안의 글자는 마크다운 변환이나 위키 링크(`[[…]]`)로 바뀌지 않고 그대로 보입니다.
+  설정: 버튼 온/오프(기본 ON). 끄면 버튼만 사라지고 이미 저장된 코드의 표시 스타일은 그대로입니다.
+  글 보기 화면의 코드 블록(툴바 코드 블록·마크다운 ```` ``` ```` 블록)에는 오른쪽 위에 반투명 복사
+  버튼이 붙습니다. 가로 스크롤해도 제자리에 있고, 들여쓰기·탭까지 그대로 복사하며, 복사되면
+  1.5초간 체크 표시로 바뀝니다. 인라인 코드·편집기에는 붙지 않고, 인쇄 시 숨겨지며, 설정과
+  무관하게 항상 표시됩니다.
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
+
+### 개발
+
+- 프런트 소스는 `resources/js/src/`에 기능 영역별로 번호 붙은 조각 14개(`01-head.js` …
+  `09a-code-format.js`, `09b-code-copy.js` … `12-scan-boot.js`)로 있습니다. 조각은 하나의 IIFE를 이어서 자른 것이라, 조각 하나만으로는 완결된 스크립트가 아닙니다.
+  `12-scan-boot.js`가 IIFE를 닫으므로 새 조각은 기존 번호 사이에 "앞 번호 + 소문자"로 넣습니다
+  (예: `09a-code-format.js`). 이름 정렬은 `LC_ALL=C` 기준입니다.
+- `scripts/build-js.sh`가 조각을 이름 순으로 이어 붙여 `dist/js/plugin.iife.js`와
+  `resources/js/index.js` 두 곳에 씁니다(두 파일은 항상 같습니다). `--check`를 붙이면 파일을
+  쓰지 않고, 어느 한쪽이라도 결합 결과와 다르면 `1`로 끝납니다.
+- 조각을 고친 뒤에는 반드시 `scripts/build-js.sh`를 실행하고 다시 만든 파일을 함께
+  커밋합니다. npm·번들러는 쓰지 않습니다. `scripts/`는 릴리스 압축 파일에 들어가지 않습니다.
 
 ## Acknowledgments
 

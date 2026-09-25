@@ -87,7 +87,7 @@ class Plugin extends AbstractPlugin
     /**
      * 플러그인 설정 스키마 반환
      *
-     * 여섯 탭으로 나뉜다:
+     * 일곱 탭으로 나뉜다:
      *  - `sns_*`        : SNS 링크 임베드 (마스터 토글 + 플랫폼별 토글 + Shorts 비율)
      *  - `linkcard_*`   : 외부 링크 카드화 (마스터 토글 + 최소 카드 토글 + 이미지 크기 + 캐시 TTL 2종)
      *  - `video_*`      : 로컬 동영상 업로드 (마스터 토글 + 최대 크기 + 청크 크기 + 확장자 토글 + 보관기간)
@@ -95,6 +95,7 @@ class Plugin extends AbstractPlugin
      *  - `editor_*`     : 에디터 스타일 (마스터 토글 + 글자크기 + 줄간격 + 댓글에도 적용)
      *  - `imagepaste_*` : 이미지 복붙 (클립보드 자동 업로드 토글 + PNG→WebP 변환 토글,
      *                     둘은 서로 독립 — 둘 다 이 플러그인 안에서 완결됨, 클래스 상단 docblock 참고)
+     *  - `codeformat_*` : 코드 서식 (본문 에디터 인라인 코드·코드 블록 버튼 토글. 저장된 코드 표시는 항상 켜짐)
      *
      * @return array 설정 스키마
      */
@@ -369,6 +370,13 @@ class Plugin extends AbstractPlugin
                 ['ko' => '업로드 이미지 PNG→WebP 자동 변환', 'en' => 'Auto-convert Uploaded PNG Images to WebP'],
                 ['ko' => '클립보드 붙여넣기 시 브라우저가 이미지를 PNG로 재구성해 용량이 커지는 문제를 줄이기 위해, 서버에 저장할 때 PNG를 WebP로 다시 압축합니다(무손실 우선, 필요 시 고품질 손실 압축, 원본보다 커지면 자동으로 원본을 그대로 둡니다). 위 클립보드 붙여넣기 설정을 꺼도 이 설정은 별개로 동작합니다.', 'en' => "To offset browsers re-encoding pasted images as PNG (which inflates file size), PNG uploads are re-compressed to WebP on the server (lossless first, falling back to high-quality lossy compression if needed, automatically keeping the original if the result would be larger). This works independently of the clipboard-paste setting above."],
             ),
+
+            // ---- 탭 7: 코드 서식 ----
+            'codeformat_enabled' => $this->booleanSetting(
+                true,
+                ['ko' => '코드 서식 버튼 사용', 'en' => 'Enable Code Formatting Buttons'],
+                ['ko' => '켜면 게시글 본문 에디터 툴바에 인라인 코드·코드 블록 버튼이 생깁니다. 끄면 버튼만 사라지고, 이미 작성한 글의 코드는 그대로 보입니다.', 'en' => 'When on, the post editor toolbar gets inline code and code block buttons. When off, only the buttons go away; code in existing posts still displays as before.'],
+            ),
         ];
     }
 
@@ -414,6 +422,7 @@ class Plugin extends AbstractPlugin
             'editor_apply_to_comments' => false,
             'imagepaste_enabled' => true,
             'imagepaste_webp_enabled' => true,
+            'codeformat_enabled' => true,
         ];
     }
 

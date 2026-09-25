@@ -5,6 +5,111 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-09-25
+
+### Added
+
+- **Code formatting buttons in the post editor.** The post editor toolbar gets
+  *Code* (after *Strikethrough*) and *Code block* (after *Block quote*), using the
+  Code and CodeBlock plugins that ship in the installed CKEditor build.
+  `sirsoft-ckeditor5` is not modified, and the comment editor is left alone. Code
+  is saved as `<code>` and `<pre><code class="language-plaintext">`, so wiki
+  links and Markdown marks inside it stay as typed. No autoformat or shortcuts are
+  added. A new *Code formatting* settings tab turns the buttons off (on by
+  default); saved code is always styled for display (smaller monospace, soft
+  background, sideways scroll for long lines, dark-mode colors). The code block
+  button has no language arrow (plain text is the only language), and a code
+  block's horizontal scrollbar stays visible (8px, light and dark colors) so long
+  lines don't look cut off on macOS.
+- **Copy button on code blocks.** Every code block in a viewed post — toolbar code
+  blocks and Markdown ```` ``` ```` blocks — gets a small half-transparent copy
+  button in its top-right corner (it stays there while the block scrolls sideways;
+  full opacity on hover or keyboard focus). The block's top padding grows by 36px
+  so the button sits in an empty strip above the first line and never covers long
+  lines; this is display only, no blank line is saved or copied. It copies the code
+  exactly as shown, indentation and tabs included, using the Clipboard API with a
+  hidden-textarea fallback, and shows a check mark for 1.5 seconds. Inline code gets
+  no button, the editors (post and comment) get none, and the button is hidden when
+  printing. It is shown regardless of the *Code formatting* setting.
+
+### Changed
+
+- **The plugin's routes no longer share a rate-limit counter with the rest of the
+  site.** Before, they used Laravel's unnamed `throttle:N,1`. That key is the member
+  id or the visitor IP, with no route in it. So every public Gnuboard7 API (board
+  lists, menus, widgets at 600/minute) counted against the same number. A visitor
+  who had just browsed a few pages could hit the link-preview limit of 30 on the
+  first card, and the link stayed a plain link.
+  - Each route group now has its own named limiter. The key is `user:<id>` for a
+    signed-in member and `ip:<address>` otherwise.
+
+    | Limiter | Routes | Per minute |
+    |---|---|---|
+    | `g7-ckeditor5-superpack.link-preview` | `GET link-preview` | 60 (was 30) |
+    | `g7-ckeditor5-superpack.video-session` | `POST video/upload/init`, `POST video/upload/complete` | 60 |
+    | `g7-ckeditor5-superpack.video-chunk` | `POST video/upload/chunk` | 1200 |
+    | `g7-ckeditor5-superpack.video-meta` | `POST video/meta` | 120 |
+    | `g7-ckeditor5-superpack.video-serve` | `GET video/{id}` | 600 |
+
+  - Over the limit, the response is the same `429` as before.
+  - The limiters are registered when the plugin boots, so they also work with a
+    route cache.
+  - The limit on real outbound link-preview fetches is unchanged (120 per minute
+    site-wide, 20 per minute per host).
+- **Behind a reverse proxy**, set `TRUSTED_PROXIES` in the core `.env`. Otherwise
+  every visitor is seen as the proxy's address and shares one link-preview
+  allowance. Check it with `php artisan trusted-proxy:status`.
+- **A link card that gets a 429 is retried once instead of giving up.** The retry
+  waits for `Retry-After` (up to 10 seconds, or 2 seconds when the header is
+  missing) plus up to 1 second of jitter. Cards for the same address now share one
+  request.
+
+### Fixed
+
+- **Editor style no longer drops out while you edit.** The font size and line height
+  from "Editor style" fell back to the page default when the editor gained or lost
+  focus, and stayed that way until something else changed on the page. The marker
+  class now sits on the editor's outer container, which CKEditor does not rewrite.
+- **The comment box follows "Apply to comments too".** Before, the comment editor
+  picked up the post editor's font size and line height whether that option was on
+  or off. Now it gets them only when the option is on.
+- **Headings from the toolbar look like headings again.** With "Editor style" on,
+  Heading 1/2/3 (`h2`/`h3`/`h4`) showed at body size in the editor and on the post
+  page, because the theme resets heading sizes to `inherit`. They now get 1.5 / 1.3 /
+  1.15 times the body size, bold, with their own line height and spacing. Sizes set
+  inline with the font-size tool still win, and Markdown headings keep their own
+  styles.
+- **The post editor no longer runs the visitor-side link processing.** Bare links in
+  the editor were being marked for SNS embeds, link cards and video, and each one
+  fired a link-preview request while you wrote. Editing areas are now skipped.
+- **Only one video upload bar per post editor.** CKEditor's `ckeditor5-*` style and
+  script tags in `<head>` were taken for editor containers, which put extra upload
+  bars inside `<head>`. Only containers that actually hold an editor are used now.
+- **Image pasting is no longer intercepted in the comment box.** The comment editor
+  has no image upload, but pasted images were caught and then dropped. The
+  paste handler and upload timeout guard are now attached to the post editor only.
+- **Missing translations added.** The image paste size notice, the "wait for the
+  upload" notice, the "Uploading" button label, the upload timeout notice and the
+  copy button labels now come from the language files (English and Korean) instead
+  of built-in Korean text.
+- **Minimal link cards no longer jump after they appear.** The favicon slot stays
+  hidden until the icon actually loads, so a blocked favicon no longer removes the
+  slot and shifts the title.
+- **Stale editors are dropped from the image paste list**, so the list no longer
+  grows as you move between pages.
+- **Embed re-processing is scheduled once per scan burst** (2, 5 and 10 seconds
+  after the last scan) instead of stacking new timers on every scan.
+- **The video file picker filter follows the allowed formats**, so formats that are
+  turned off are no longer offered.
+
+### Internal
+
+- The front-end source is split by feature into 14 numbered pieces in
+  `resources/js/src/`. `scripts/build-js.sh` joins them in name order into
+  `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
+  identical); `--check` verifies that both are up to date. The shipped script is
+  that joined result. `scripts/` is not included in release archives.
+
 ## [1.4.0] - 2026-09-17
 
 ### Security

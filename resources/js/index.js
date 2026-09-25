@@ -135,6 +135,11 @@
     return (typeof r === 'string' && r !== full) ? r : fallback;
   }
 
+  /** el 이 CKEditor 편집 영역(본문·댓글 편집기) 안이면 true. 편집 영역도 `.ck-content` 라 방문자 스캔에서 뺄 때 쓴다. */
+  function isEditingArea(el) {
+    return !!(el && el.closest && el.closest('.ck-editor__editable, .ck-editor'));
+  }
+
   /* ================================================================ *
    *  SNS 임베드
    * ================================================================ */
@@ -458,7 +463,7 @@
     var domain = (p.domain || '').trim();
     var fav = (p.favicon || '').trim();
     var favPart = fav
-      ? '<div class="ck5-linkcard__favwrap"><img class="ck5-linkcard__favicon" src="' + esc(fav) + '" alt="" loading="lazy" referrerpolicy="no-referrer" width="18" height="18"></div>'
+      ? '<div class="ck5-linkcard__favwrap"><img class="ck5-linkcard__favicon" src="' + esc(fav) + '" alt="" referrerpolicy="no-referrer" width="18" height="18"></div>'
       : '';
     return '<a class="ck5-linkcard ck5-linkcard--minimal" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer nofollow">'
       + favPart
@@ -470,8 +475,10 @@
   }
 
   var previewCache = {}; // url -> Preview
+  var previewPending = {}; // url -> Promise (진행 중·429 재시도 대기 중, 같은 URL 은 요청을 공유)
   var inflight = 0;
   var fetchQueue = [];
+  var RETRY_LATER = {};
 
   function pump() {
     while (inflight < MAX_INFLIGHT && fetchQueue.length > 0) {
@@ -479,25 +486,62 @@
     }
   }
 
+  /**
+   * 429 의 Retry-After(초)로 재시도 대기 시간(ms)을 정한다. 재시도하지 않으면 null.
+   * 없음 → 2초, 10초 이하 → 그 값. 10초 초과·숫자 아님 → null. 둘 다 0~999ms 무작위 지연을 더한다.
+   */
+  function previewRetryDelay(retryAfter) {
+    var jitter = Math.floor(Math.random() * 1000);
+    if (retryAfter === null || retryAfter === undefined || String(retryAfter).trim() === '') return 2000 + jitter;
+    var v = String(retryAfter).trim();
+    if (!/^\d+$/.test(v)) return null;
+    var sec = parseInt(v, 10);
+    return sec > 10 ? null : sec * 1000 + jitter;
+  }
+
+  /** 요청 1회를 큐에 넣는다. 첫 429 는 캐시하지 않고 한 번만 다시 넣는다. */
+  function requestPreview(url, retried, finish) {
+    fetchQueue.push(function () {
+      inflight++;
+      var waitMs = null;
+      var done = function (p) {
+        inflight--;
+        finish(p);
+        pump();
+      };
+      fetch(API + '?url=' + encodeURIComponent(url), { headers: { Accept: 'application/json' } })
+        .then(function (r) {
+          if (r.status === 429 && !retried) {
+            waitMs = previewRetryDelay(r.headers.get('Retry-After'));
+            if (waitMs !== null) return RETRY_LATER;
+          }
+          return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+        })
+        .then(function (p) {
+          if (p === RETRY_LATER) {
+            inflight--;
+            pump();
+            window.setTimeout(function () { requestPreview(url, true, finish); }, waitMs);
+            return;
+          }
+          done(p && typeof p === 'object' ? p : { status: 'failed' });
+        })
+        .catch(function () { done({ status: 'failed' }); });
+    });
+    pump();
+  }
+
   function getPreview(url) {
     if (previewCache[url]) return Promise.resolve(previewCache[url]);
-    return new Promise(function (resolve) {
-      var run = function () {
-        inflight++;
-        var done = function (p) {
-          previewCache[url] = p;
-          inflight--;
-          resolve(p);
-          pump();
-        };
-        fetch(API + '?url=' + encodeURIComponent(url), { headers: { Accept: 'application/json' } })
-          .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
-          .then(function (p) { done(p && typeof p === 'object' ? p : { status: 'failed' }); })
-          .catch(function () { done({ status: 'failed' }); });
-      };
-      fetchQueue.push(run);
-      pump();
+    if (previewPending[url]) return previewPending[url];
+    previewPending[url] = new Promise(function (resolve) {
+      requestPreview(url, false, function (p) {
+        previewCache[url] = p;
+        delete previewPending[url];
+        resolve(p);
+      });
     });
+    return previewPending[url];
   }
 
   function applyCard(target, url, p, kind, cfg) {
@@ -530,10 +574,13 @@
 
     var favEl = holder.querySelector('.ck5-linkcard__favicon');
     if (favEl) {
-      favEl.addEventListener('error', function () {
+      // 파비콘 칸은 CSS 로 숨겨 두고 불러오기에 성공했을 때만 보인다. 실패하면 숨긴 채로 둔다(카드 모양 불변).
+      var showFav = function () {
         var w = favEl.closest('.ck5-linkcard__favwrap');
-        if (w) w.remove();
-      }, { once: true });
+        if (w && favEl.naturalWidth > 0) w.classList.add('is-loaded');
+      };
+      if (favEl.complete) showFav();
+      else favEl.addEventListener('load', showFav, { once: true });
     }
 
     if (kind === 'fallback') {
@@ -568,6 +615,7 @@
       + '.ck5-linkcard--minimal{max-width:420px;border-style:dashed;background:#f8fafc;align-items:center;}'
       + '.ck5-linkcard--minimal:hover{border-color:#cbd5e1;box-shadow:none;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__favwrap{flex:0 0 auto;display:flex;align-items:center;justify-content:center;padding-left:12px;}'
+      + '.ck5-linkcard .ck5-linkcard__favwrap:not(.is-loaded){display:none;}'
       + '.ck5-linkcard__favicon{width:18px;height:18px;object-fit:contain;display:block;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__body{padding:9px 12px;gap:2px;}'
       + '.ck5-linkcard--minimal .ck5-linkcard__title{font-size:.875rem;-webkit-line-clamp:1;}'
@@ -737,7 +785,7 @@
 
   /** 살아있는 CKEditor 인스턴스를 컨테이너 근처에서 찾는다. */
   function editorInstanceNear(container) {
-    var scopes = [container, container.parentElement, container.nextElementSibling, document];
+    var scopes = [container, container.parentElement, container.nextElementSibling];
     for (var i = 0; i < scopes.length; i++) {
       var sc = scopes[i];
       if (!sc || !sc.querySelectorAll) continue;
@@ -851,7 +899,8 @@
     injectUploadStyle();
 
     var exts = allowedVideoExts(cfg);
-    var accept = exts.map(function (x) { return '.' + x; }).concat(['video/mp4', 'video/quicktime', 'video/webm']).join(',');
+    var MIME = { mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm' }; // 허용 확장자에 맞는 MIME 만
+    var accept = exts.map(function (x) { return '.' + x; }).concat(exts.map(function (x) { return MIME[x]; }).filter(Boolean)).join(',');
 
     var bar = document.createElement('div');
     bar.className = 'ck5sp-vbar';
@@ -1030,8 +1079,8 @@
    *  이번엔 시도하지 않는다 — 바이너리가 없으면 아무 것도 하지 않고 CKEditor5
    *  기본 동작에 맡긴다.
    *
-   *  컨테이너 셀렉터(`scanEditors`)가 이미 댓글 에디터(`g7ce-wrapper`)를
-   *  구조적으로 배제하므로 게시글 본문 편집기에만 적용된다(별도 스코프 코드 불요).
+   *  게시글 본문 편집기에만 적용한다. 댓글 에디터(`g7ce-wrapper` 안)는
+   *  attachPasteImageHandlerTo 에서 명시적으로 건너뛴다(업로드 경로가 없음).
    */
 
   var pasteImageRoots = []; // [{ domRoot, editor }]
@@ -1133,7 +1182,11 @@
     var domRoot;
     try { domRoot = editor.editing.view.getDomRoot(); } catch (e) { return; }
     if (!domRoot) return;
+    if (domRoot.closest('.g7ce-wrapper')) return; // 댓글 편집기는 이미지 업로드 경로가 없다
     container.__ck5spPasteImage = true;
+    for (var pr = pasteImageRoots.length - 1; pr >= 0; pr--) {
+      if (!pasteImageRoots[pr].domRoot || !pasteImageRoots[pr].domRoot.isConnected) pasteImageRoots.splice(pr, 1); // SPA 이동으로 끊긴 편집기 정리
+    }
     pasteImageRoots.push({ domRoot: domRoot, editor: editor });
     ensurePasteImageListener();
     attachSubmitButtonUploadState(editor, domRoot);
@@ -1381,12 +1434,15 @@
    *    셀렉터를 규칙에 추가한다 — CSS는 DOM 클래스 기준으로 적용되므로 그 클래스를
    *    어느 플러그인이 렌더링/승격했는지는 무관하다(슈퍼팩·g7-comment-editor 어느
    *    쪽 파일도 건드리지 않음).
-   *  - **편집 화면**: 순수 CSS 셀렉터로는 게시글 본문 에디터와 댓글 에디터의
-   *    `.ck-content`를 구분할 표식이 없어(둘 다 CKEditor5가 자동으로 붙이는
-   *    클래스), **살아있는 에디터 인스턴스**를 직접 찾아(컨테이너 셀렉터 자체가
-   *    이미 댓글 에디터의 `g7ce-wrapper`를 구조적으로 배제) 그 DOM 루트에만 마커
-   *    클래스를 붙인다 — "댓글에도 적용" 옵션은 방문자 화면(렌더링된 댓글)에만
-   *    적용되고 댓글 작성 화면(입력창) 자체는 대상이 아니다.
+   *  - **편집 화면**: 표식은 CKEditor 가 관리하지 않는 **바깥 컨테이너**에 붙이고,
+   *    CSS 는 그 아래 `.ck-editor__editable` 에 건다. 편집 루트(`getDomRoot()`)에
+   *    직접 붙이면 CKEditor 렌더러가 포커스 전환 때 루트 class 를 다시 써서 표식이
+   *    지워진다(1.5.0 에서 고침).
+   *    - 게시글 본문 에디터: `div.ckeditor5-wrapper` (sirsoft-ckeditor5
+   *      `html-editor.json` 의 고정 className 컨테이너, 편집기는 그 안에 생성)
+   *    - 댓글 에디터: `div.g7ce-wrapper` (g7-comment-editor 가 만드는 컨테이너).
+   *      "댓글에도 적용" 옵션이 켜져 있을 때만 붙인다.
+   *    컨테이너는 안에 `.ck-editor__editable` 이 있을 때만 대상이다.
    *
    * font-size/line-height 는 `ckeditor5.css`에 `.ck-content` 베이스 규칙이 아예
    * 없어(조사 확인) 경합 대상 자체가 없지만, 로드 순서가 결정론적이지 않은 동적
@@ -1396,6 +1452,27 @@
 
   var EDITOR_STYLE_ID = 'ck5sp-editor-style';
   var EDITOR_STYLE_MARKER = 'ck5sp-body-editor-style';
+  var COMMENT_EDITOR_STYLE_MARKER = 'ck5sp-comment-editor-style';
+
+  /**
+   * 에디터 제목(CKEditor 기본 heading 옵션: 제목 1·2·3 = h2·h3·h4)의 크기·줄간격·여백·굵기.
+   * 템플릿 Tailwind Preflight 가 h1~h6 를 `font-size/font-weight: inherit` 로 리셋해 제목이
+   * 본문 크기로 보이므로 여기서 준다. em 은 본문 글자 크기(글자 크기) / 그 제목 자신의 크기(여백) 기준.
+   * `!important` 는 쓰지 않는다 — 사용자가 인라인 style 로 준 크기가 이기게 한다.
+   * 마크다운 변환 제목(`[data-ck5-md]`)은 자기 규칙(10 조각)이 있으므로 제외한다.
+   */
+  var EDITOR_HEADINGS = [
+    ['h2', '1.5em', '1.2em', '.6em'],
+    ['h3', '1.3em', '1.1em', '.5em'],
+    ['h4', '1.15em', '1em', '.5em']
+  ];
+
+  function editorHeadingCss(scopes) {
+    return EDITOR_HEADINGS.map(function (h) {
+      var sel = scopes.map(function (s) { return s + ' ' + h[0] + ':not([data-ck5-md])'; }).join(',');
+      return sel + '{font-size:' + h[1] + ';line-height:1.4;margin-top:' + h[2] + ';margin-bottom:' + h[3] + ';font-weight:700;}';
+    }).join('');
+  }
 
   /** 관리자 설정값으로 <style> 태그를 생성/갱신/제거한다(멱등). */
   function injectEditorStyleCss(cfg) {
@@ -1406,9 +1483,11 @@
     }
     var selectors = ['.ck-content.prose'];
     if (cfg.editorApplyToComments) selectors.push('p.text-gray-700.dark\\:text-gray-300');
+    var editorScopes = ['.' + EDITOR_STYLE_MARKER + ' .ck-editor__editable', '.' + COMMENT_EDITOR_STYLE_MARKER + ' .ck-editor__editable'];
     var rule = 'font-size:' + cfg.editorFontSize + 'px!important;line-height:' + cfg.editorLineHeight + '!important;';
     var css = selectors.join(',') + '{' + rule + '}'
-      + '.' + EDITOR_STYLE_MARKER + '{' + rule + '}';
+      + editorScopes.join(',') + '{' + rule + '}'
+      + editorHeadingCss(selectors.concat(editorScopes));
     if (existing) {
       if (existing.textContent !== css) existing.textContent = css;
       return;
@@ -1419,22 +1498,26 @@
     document.head.appendChild(el);
   }
 
-  /** 편집기 컨테이너 하나의 실제 편집 DOM 루트에 마커 클래스를 붙이거나 뗀다. */
-  function attachEditorStyleTo(container) {
-    var cfg = readSettings();
-    var editor = editorInstanceNear(container);
-    if (!editor) return;
-    var domRoot = null;
-    try { domRoot = editor.editing.view.getDomRoot(); } catch (e) {}
-    if (!domRoot) return;
-    if (domRoot.classList.contains(EDITOR_STYLE_MARKER) !== !!cfg.editorStyleEnabled) {
-      domRoot.classList.toggle(EDITOR_STYLE_MARKER, !!cfg.editorStyleEnabled);
+  /** 편집기 바깥 컨테이너에 표식 클래스를 붙이거나 뗀다(안에 편집 영역이 있을 때만 붙임). */
+  function markEditorContainers(selector, marker, enabled) {
+    var list = document.querySelectorAll(selector);
+    for (var i = 0; i < list.length; i++) {
+      var want = enabled && !!list[i].querySelector('.ck-editor__editable');
+      if (list[i].classList.contains(marker) !== want) list[i].classList.toggle(marker, want);
     }
   }
 
+  /** 본문 에디터·댓글 에디터 컨테이너의 표식을 설정에 맞춘다(멱등). */
+  function applyEditorStyleMarkers() {
+    var cfg = readSettings();
+    var on = !!cfg.editorStyleEnabled;
+    markEditorContainers('div.ckeditor5-wrapper', EDITOR_STYLE_MARKER, on);
+    markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
+  }
+
   function scanEditors() {
-    // 동영상 업로드 바/에디터 스타일 마커 둘 다 켜짐 여부를 각자 내부에서
-    // 확인하므로(attachUploaderTo, attachEditorStyleTo) 여기선 컨테이너 존재만
+    // 동영상 업로드 바/이미지 복붙 둘 다 켜짐 여부를 각자 내부에서
+    // 확인하므로(attachUploaderTo, attachPasteImageHandlerTo) 여기선 컨테이너 존재만
     // 확인한다. (이전엔 `if (!cfg.videoEnabled) return;` 로 videoEnabled 가
     // 꺼지면 이 순회 자체를 건너뛰었는데, 그러면 videoEnabled 와 무관한 다른
     // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
@@ -1443,12 +1526,15 @@
     for (var i = 0; i < containers.length; i++) {
       // 에디터가 실제로 붙었는지 확인 (editable 존재)
       var cont = containers[i];
+      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
+      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
       if (!editorInstanceNear(cont)) continue;
       attachUploaderTo(cont);
-      attachEditorStyleTo(cont);
       attachPasteImageHandlerTo(cont);
       ensureSubmitGuardListener();
     }
+    // 편집 스타일 표식은 위 컨테이너 목록과 무관하게 고정 구조로 찾는다.
+    applyEditorStyleMarkers();
   }
 
   var editorObserver = null;
@@ -1460,6 +1546,304 @@
       editorScanTimer = window.setTimeout(function () { editorScanTimer = null; scanEditors(); }, 250);
     });
     editorObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  /* ================================================================ *
+   *  코드 서식 — 본문 에디터에 인라인 코드·코드 블록 버튼 (1.5.0)
+   * ================================================================ *
+   *  - sirsoft-ckeditor5 를 고치지 않고, 설치된 CKEditor 빌드의 Code·CodeBlock 플러그인을
+   *    **게시글 본문 에디터에만** 넣는다. sirsoft 는 `extraPlugins` 를 넘기지 않고, 플러그인은
+   *    생성 뒤에 더할 수 없으므로 `ClassicEditor.create` 를 감싸 config 복사본에 더한다.
+   *  - UMD 는 `window.CKEDITOR = {}` 를 먼저 대입하고 `exports.ClassicEditor = …` 를 나중에
+   *    채운다. 그래서 `window.CKEDITOR` 대입과 그 객체의 `ClassicEditor` 대입을 접근자로 잡아
+   *    감싼다(이미 로드돼 있으면 바로 감싼다). g7-comment-editor 는 같은 ClassicEditor 를
+   *    쓰지만, 대상 요소가 `.ckeditor5-wrapper` 안이 아니므로 건드리지 않는다.
+   *  - 어떤 예외도 에디터 생성을 막지 않는다: 원래 config 로 넘기고 console.warn 을 한 번만.
+   *  - 저장된 코드의 표시 스타일은 설정과 무관하게 항상 넣는다(끄더라도 기존 글의 코드는 보여야 함).
+   *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)는 자기 규칙이 있어 제외한다.
+   */
+
+  var CODE_STYLE_ID = 'ck5sp-code-style';
+  var codeFormatWarned = false;
+
+  function codeFormatWarn(reason) {
+    if (codeFormatWarned) return;
+    codeFormatWarned = true;
+    try { console.warn('[' + IDENTIFIER + '] code formatting disabled: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
+  }
+
+  /** 설정 `codeformat_enabled`(기본 켜짐)를 에디터 생성 시점에 읽는다. */
+  function codeFormatEnabled() {
+    var s = (window.G7Config && window.G7Config.plugins && window.G7Config.plugins[IDENTIFIER]) || {};
+    return asBool(s.codeformat_enabled, true);
+  }
+
+  /** 툴바 항목 복사본에 name 을 after 바로 뒤(없으면 끝)에 넣는다. 이미 있으면 그대로. */
+  function insertToolbarItem(items, name, after) {
+    if (items.indexOf(name) !== -1) return;
+    var i = items.indexOf(after);
+    if (i === -1) items.push(name);
+    else items.splice(i + 1, 0, name);
+  }
+
+  /** 본문 에디터면 Code·CodeBlock·툴바 항목을 더한 config 복사본을, 아니면 원래 cfg 를 돌려준다. */
+  function codeFormatConfig(el, cfg) {
+    if (!codeFormatEnabled()) return cfg;
+    if (!el || !el.closest || !el.closest('.ckeditor5-wrapper')) return cfg;
+    var CK = window.CKEDITOR;
+    if (!CK || !CK.Code || !CK.CodeBlock) { codeFormatWarn('Code/CodeBlock not found in the CKEditor build'); return cfg; }
+    if (!cfg || !Array.isArray(cfg.plugins) || !cfg.toolbar || !Array.isArray(cfg.toolbar.items)) { codeFormatWarn('unexpected editor config'); return cfg; }
+
+    var extra = [];
+    if (cfg.plugins.indexOf(CK.Code) === -1) extra.push(CK.Code);
+    var addBlock = cfg.plugins.indexOf(CK.CodeBlock) === -1;
+    if (addBlock) extra.push(CK.CodeBlock);
+
+    var items = cfg.toolbar.items.slice();
+    insertToolbarItem(items, 'code', 'strikethrough');
+    insertToolbarItem(items, 'codeBlock', 'blockQuote');
+
+    var next = Object.assign({}, cfg, {
+      extraPlugins: (Array.isArray(cfg.extraPlugins) ? cfg.extraPlugins : []).concat(extra),
+      toolbar: Object.assign({}, cfg.toolbar, { items: items })
+    });
+    // CKEditor 는 'Plain text' 라벨을 스스로 번역한다(ko: 평문). 이미 CodeBlock 이 있는 프리셋은 언어 설정도 그대로 둔다.
+    if (addBlock && !cfg.codeBlock) next.codeBlock = { languages: [{ language: 'plaintext', label: 'Plain text' }] };
+    return next;
+  }
+
+  function wrapClassicEditor(C) {
+    if (!C || C.__ck5spCodeWrapped || typeof C.create !== 'function') return;
+    var original = C.create;
+    try {
+      C.create = function (el, cfg) {
+        var next = cfg;
+        try { next = codeFormatConfig(el, cfg); } catch (e) { codeFormatWarn(e); next = cfg; }
+        return original.call(this, el, next);
+      };
+      C.__ck5spCodeWrapped = true;
+    } catch (e) { codeFormatWarn(e); }
+  }
+
+  /** UMD exports 객체: ClassicEditor 가 있으면 바로, 나중에 대입되면 그때 감싼다. */
+  function watchCkeditorExports(ck) {
+    if (!ck || typeof ck !== 'object') return;
+    var current = ck.ClassicEditor;
+    if (current) wrapClassicEditor(current);
+    var d = Object.getOwnPropertyDescriptor(ck, 'ClassicEditor');
+    if (d && d.configurable === false) return;
+    Object.defineProperty(ck, 'ClassicEditor', {
+      configurable: true,
+      enumerable: true,
+      get: function () { return current; },
+      set: function (v) { current = v; wrapClassicEditor(v); }
+    });
+  }
+
+  function installCodeFormatHook() {
+    try {
+      var current = window.CKEDITOR;
+      if (current) watchCkeditorExports(current);
+      var d = Object.getOwnPropertyDescriptor(window, 'CKEDITOR');
+      if (d && d.configurable === false) return;
+      Object.defineProperty(window, 'CKEDITOR', {
+        configurable: true,
+        enumerable: true,
+        get: function () { return current; },
+        set: function (v) {
+          current = v;
+          try { watchCkeditorExports(v); } catch (e) { codeFormatWarn(e); }
+        }
+      });
+    } catch (e) { codeFormatWarn(e); }
+  }
+
+  /** 저장된 코드 표시 스타일(설정 무관, 1회). */
+  function injectCodeStyle() {
+    if (document.getElementById(CODE_STYLE_ID)) return;
+    var scopes = ['.ck-content.prose', '.ckeditor5-wrapper .ck-editor__editable'];
+    var sel = function (suffix, prefix) {
+      return scopes.map(function (s) { return (prefix || '') + s + ' ' + suffix; }).join(',');
+    };
+    var inline = ':not(pre)>code:not([data-ck5-mdc])';
+    var block = 'pre:not(.ck5-md-pre)';
+    var el = document.createElement('style');
+    el.id = CODE_STYLE_ID;
+    el.textContent = ''
+      + sel(inline) + '{font-size:.9em;padding:.1em .35em;border-radius:4px;background:#f1f5f9;color:#1e293b;}'
+      + sel(block) + '{font-size:.9em;line-height:1.5;white-space:pre;overflow-x:auto;padding:.8em 1em;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;}'
+      + sel(block + '>code') + '{font-size:inherit;background:transparent;padding:0;color:inherit;white-space:inherit;}'
+      + sel(inline, 'html.dark ') + '{background:#334155;color:#e2e8f0;}'
+      + sel(block, 'html.dark ') + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}'
+      // 가로 스크롤바를 항상 보이게(macOS 는 평소 숨김). 웹킷 규칙은 Chrome·Safari 용이다.
+      // Chrome 121+ 는 표준 scrollbar-* 가 있으면 웹킷 규칙을 무시하므로, 표준 속성은 Firefox 에만 준다.
+      + sel(block + '::-webkit-scrollbar') + '{height:8px;}'
+      + sel(block + '::-webkit-scrollbar-track') + '{background:#e2e8f0;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-thumb') + '{background:#64748b;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-track', 'html.dark ') + '{background:#1e293b;}'
+      + sel(block + '::-webkit-scrollbar-thumb', 'html.dark ') + '{background:#94a3b8;}'
+      + '@supports (-moz-appearance:none){'
+      + sel(block) + '{scrollbar-width:thin;scrollbar-color:#64748b #e2e8f0;}'
+      + sel(block, 'html.dark ') + '{scrollbar-color:#94a3b8 #1e293b;}'
+      + '}'
+      // 언어가 plaintext 하나라 코드 블록 split button 의 언어 목록 화살표는 쓸모가 없다(본문 에디터만).
+      + '.ckeditor5-wrapper .ck-code-block-dropdown .ck-splitbutton__arrow{display:none;}';
+    (document.head || document.documentElement).appendChild(el);
+  }
+
+  installCodeFormatHook();
+  try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
+
+  /* ================================================================ *
+   *  코드 블록 복사 버튼 — 방문자 본문 (1.5.0)
+   * ================================================================ *
+   *  - 방문자 본문(`.ck-content`)의 모든 `pre`(툴바 코드 블록·마크다운 ``` 코드 블록) 오른쪽
+   *    위에 반투명 복사 버튼을 단다. 인라인 코드에는 달지 않는다. `codeformat_enabled` 와
+   *    무관하게 항상 단다(기존 글의 코드 블록도 복사할 수 있어야 함).
+   *  - 편집 영역(`.ck-editor__editable` 도 `.ck-content`)·댓글 편집기는 제외한다. 버튼이
+   *    편집 모델에 섞여 저장되면 안 되기 때문이다.
+   *  - 별도 감시기·타이머 없이 기존 `scan()` 경로에서 부른다. 이미 버튼이 있는 `pre` 는
+   *    건너뛰므로 반복 호출해도 같다. 기존 노드를 옮기거나 감싸지 않고 버튼만 `pre` 첫
+   *    자식으로 넣는다.
+   *  - `position: sticky` 는 `pre` 콘텐츠 상자를 벗어나지 못해 가로 스크롤 시 밀려난다.
+   *    그래서 절대 위치 + `pre` 의 scroll 이벤트에서 `translateX(scrollLeft)` 로 되돌린다.
+   */
+
+  var CODE_COPY_STYLE_ID = 'ck5sp-code-copy-style';
+  var CODE_COPY_DONE_MS = 1500;
+  var codeCopyWarned = false;
+
+  var COPY_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    + '<rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+  var CHECK_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'
+    + '<polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+  function codeCopyWarn(reason) {
+    if (codeCopyWarned) return;
+    codeCopyWarned = true;
+    try { console.warn('[' + IDENTIFIER + '] code copy failed: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
+  }
+
+  /** 언어 파일에 키가 없으면 문서 언어(ko 여부)로 대체 문구를 고른다. */
+  function codeCopyLabel(done) {
+    var lang = (document.documentElement.getAttribute('lang') || '').toLowerCase();
+    var ko = lang.indexOf('ko') === 0;
+    return done
+      ? t('content.code_copy.done', ko ? '복사됨' : 'Copied')
+      : t('content.code_copy.label', ko ? '코드 복사' : 'Copy code');
+  }
+
+  function injectCodeCopyStyle() {
+    if (document.getElementById(CODE_COPY_STYLE_ID)) return;
+    var s = document.createElement('style');
+    s.id = CODE_COPY_STYLE_ID;
+    s.textContent = [
+      // 첫 줄 위를 버튼 전용 띠로 비운다(원래 위 여백 + 36px). 화면만 바뀌고 저장·복사 텍스트에는 빈 줄이 없다.
+      // 원래 위 여백: 툴바 코드 블록 .8em(09a), 마크다운 코드 블록 12px(10).
+      '.ck-content pre[data-ck5sp-copy]{position:relative;}',
+      '.ck-content pre[data-ck5sp-copy][data-ck5sp-copy]:not(.ck5-md-pre){padding-top:calc(.8em + 36px);}',
+      '.ck-content pre.ck5-md-pre[data-ck5sp-copy]{padding-top:calc(12px + 36px);}',
+      '.ck-content pre>.ck5sp-copy-btn{position:absolute;top:10px;right:.4em;z-index:1;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:6px;background:#e2e8f0;color:#334155;opacity:.5;cursor:pointer;font:inherit;line-height:1;transition:opacity .15s;}',
+      '.ck-content pre>.ck5sp-copy-btn:hover,.ck-content pre>.ck5sp-copy-btn:focus-visible{opacity:1;}',
+      '.ck-content pre>.ck5sp-copy-btn:focus-visible{outline:2px solid currentColor;outline-offset:1px;}',
+      '.ck-content pre>.ck5sp-copy-btn svg{display:block;width:16px;height:16px;}',
+      'html.dark .ck-content pre>.ck5sp-copy-btn{background:#334155;color:#e2e8f0;}',
+      '@media print{.ck-content pre>.ck5sp-copy-btn{display:none;}}'
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  /** 복사할 텍스트: 직계 `code` 가 있으면 그 글자, 없으면 버튼을 뺀 `pre` 글자. */
+  function codeCopyText(pre) {
+    for (var i = 0; i < pre.children.length; i++) {
+      if (pre.children[i].tagName === 'CODE') return pre.children[i].textContent;
+    }
+    var clone = pre.cloneNode(true);
+    var btns = clone.querySelectorAll('.ck5sp-copy-btn');
+    for (var j = 0; j < btns.length; j++) btns[j].parentNode.removeChild(btns[j]);
+    return clone.textContent;
+  }
+
+  function copyByTextarea(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '0';
+    ta.style.left = '-9999px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    var ok = false;
+    try {
+      ta.select();
+      ok = document.execCommand('copy');
+    } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function copyCodeText(text, done) {
+    var fallback = function (why) {
+      if (copyByTextarea(text)) done();
+      else codeCopyWarn(why || 'execCommand copy returned false');
+    };
+    var clip = navigator.clipboard;
+    if (clip && typeof clip.writeText === 'function') {
+      try {
+        clip.writeText(text).then(done, function (err) { fallback(err); });
+        return;
+      } catch (e) { /* 아래 대체 경로 */ }
+    }
+    fallback();
+  }
+
+  function showCodeCopied(btn) {
+    btn.setAttribute('data-state', 'done');
+    btn.setAttribute('aria-label', codeCopyLabel(true));
+    btn.innerHTML = CHECK_ICON;
+    clearTimeout(btn._ck5spCopyTimer);
+    btn._ck5spCopyTimer = setTimeout(function () {
+      btn.removeAttribute('data-state');
+      btn.setAttribute('aria-label', codeCopyLabel(false));
+      btn.innerHTML = COPY_ICON;
+    }, CODE_COPY_DONE_MS);
+  }
+
+  function attachCodeCopyButton(pre) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ck5sp-copy-btn';
+    btn.setAttribute('aria-label', codeCopyLabel(false));
+    btn.innerHTML = COPY_ICON;
+    btn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      copyCodeText(codeCopyText(pre), function () { showCodeCopied(btn); });
+    });
+    pre.setAttribute('data-ck5sp-copy', '1');
+    pre.insertBefore(btn, pre.firstChild);
+    if (!pre._ck5spCopyScroll) {
+      pre._ck5spCopyScroll = true;
+      pre.addEventListener('scroll', function () {
+        var b = pre.querySelector(':scope > .ck5sp-copy-btn');
+        if (b) b.style.transform = pre.scrollLeft ? 'translateX(' + pre.scrollLeft + 'px)' : '';
+      }, { passive: true });
+    }
+  }
+
+  /** 방문자 본문의 코드 블록마다 복사 버튼을 단다(이미 있으면 건너뜀). */
+  function addCodeCopyButtons(root) {
+    var pres;
+    try { pres = (root || document).querySelectorAll('pre'); } catch (e) { return; }
+    if (!pres.length) return;
+    injectCodeCopyStyle();
+    for (var i = 0; i < pres.length; i++) {
+      var pre = pres[i];
+      if (!pre.closest('.ck-content')) continue;
+      if (pre.closest('.ck-editor__editable, .ck-editor, .g7ce-wrapper')) continue;
+      if (pre.querySelector(':scope > .ck5sp-copy-btn')) continue;
+      try { attachCodeCopyButton(pre); } catch (e) { codeCopyWarn(e); }
+    }
   }
 
   /* ================================================================ *
@@ -1797,10 +2181,12 @@
    *  통합 스캔
    * ================================================================ */
 
+  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
+
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
-    if (!cfg.snsEnabled && !cfg.linkcardEnabled && !cfg.videoEnabled && !cfg.mdEnabled) return;
+    if (!cfg.snsEnabled && !cfg.linkcardEnabled && !cfg.videoEnabled && !cfg.mdEnabled) { addCodeCopyButtons(root); return; }
 
     var contents;
     try { contents = root.querySelectorAll('.ck-content'); } catch (e) { return; }
@@ -1814,10 +2200,12 @@
 
     for (var c = 0; c < contents.length; c++) {
       var scope = contents[c];
+      if (isEditingArea(scope)) continue; // 편집 영역은 방문자 변환 대상이 아니다
 
       /* ---- -1) 마크다운 문법 → 실제 서식 (다른 모든 패스보다 먼저) ---- */
       // 링크가 실제 <a> 가 된 다음에 SNS/OG 카드 승격이 걸리도록 순서상 맨 앞.
       if (cfg.mdEnabled) renderMarkdown(scope, cfg);
+      addCodeCopyButtons(scope);
 
       /* ---- 0) 로컬 동영상 링크 → <video> 승격 ---- */
       // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.
@@ -1908,7 +2296,9 @@
     }
 
     if (didEmbed) {
-      [2000, 5000, 10000].forEach(function (ms) { window.setTimeout(reprocessPresent, ms); });
+      // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
+      reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
+      reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
     }
   }
 
