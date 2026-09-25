@@ -5,7 +5,7 @@
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
-    if (!cfg.snsEnabled && !cfg.linkcardEnabled && !cfg.videoEnabled && !cfg.mdEnabled) return;
+    if (!cfg.snsEnabled && !cfg.linkcardEnabled && !cfg.videoEnabled && !cfg.mdEnabled) { addCodeCopyButtons(root); return; }
 
     var contents;
     try { contents = root.querySelectorAll('.ck-content'); } catch (e) { return; }
@@ -23,6 +23,7 @@
       /* ---- -1) 마크다운 문법 → 실제 서식 (다른 모든 패스보다 먼저) ---- */
       // 링크가 실제 <a> 가 된 다음에 SNS/OG 카드 승격이 걸리도록 순서상 맨 앞.
       if (cfg.mdEnabled) renderMarkdown(scope, cfg);
+      addCodeCopyButtons(scope);
 
       /* ---- 0) 로컬 동영상 링크 → <video> 승격 ---- */
       // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.

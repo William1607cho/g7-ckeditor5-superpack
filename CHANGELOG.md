@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   button has no language arrow (plain text is the only language), and a code
   block's horizontal scrollbar stays visible (8px, light and dark colors) so long
   lines don't look cut off on macOS.
+- **Copy button on code blocks.** Every code block in a viewed post — toolbar code
+  blocks and Markdown ```` ``` ```` blocks — gets a small half-transparent copy
+  button in its top-right corner (it stays there while the block scrolls sideways;
+  full opacity on hover or keyboard focus). It copies the code exactly as shown,
+  indentation and tabs included, using the Clipboard API with a hidden-textarea
+  fallback, and shows a check mark for 1.5 seconds. Inline code gets no button, the
+  editors (post and comment) get none, and the button is hidden when printing. It
+  is shown regardless of the *Code formatting* setting.
 
 ### Changed
 

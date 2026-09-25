@@ -19,7 +19,8 @@ modifying the editor itself**:
 5. **Editor style** — a site-wide base font size and line height for the post body,
    optionally extended to comments too.
 6. **Code formatting** — *Code* and *Code block* buttons in the post editor toolbar.
-   Code is saved as real `<code>` / `<pre>`, so its text is shown as typed.
+   Code is saved as real `<code>` / `<pre>`, so its text is shown as typed. Code
+   blocks in a viewed post get a copy button.
 
 In every case the stored content is just plain `<a href>` links and the original
 text (editor style is the exception — it's a CSS rule, not a content transform).
@@ -324,6 +325,11 @@ autoformat, no new shortcuts).
   alone.
 - Saved code is always styled for display (smaller monospace, soft background, long
   lines scroll sideways, a dark-mode palette), even when the buttons are turned off.
+- Every code block in a viewed post (toolbar code blocks and Markdown ```` ``` ````
+  blocks) gets a copy button in its top-right corner: half-transparent until hovered
+  or focused, it stays put while the block scrolls sideways, copies the code exactly
+  as shown and shows a check mark for 1.5 seconds. Inline code and the editors get
+  no button, it is hidden when printing, and it does not depend on the setting.
 
 ## Settings screen
 
@@ -442,6 +448,10 @@ followed by that feature's detailed options:
   `<code>`, 코드 블록은 `<pre><code class="language-plaintext">`(일반 텍스트, 문법 강조 없음)로
   저장되어, 코드 안의 글자는 마크다운 변환이나 위키 링크(`[[…]]`)로 바뀌지 않고 그대로 보입니다.
   설정: 버튼 온/오프(기본 ON). 끄면 버튼만 사라지고 이미 저장된 코드의 표시 스타일은 그대로입니다.
+  글 보기 화면의 코드 블록(툴바 코드 블록·마크다운 ```` ``` ```` 블록)에는 오른쪽 위에 반투명 복사
+  버튼이 붙습니다. 가로 스크롤해도 제자리에 있고, 들여쓰기·탭까지 그대로 복사하며, 복사되면
+  1.5초간 체크 표시로 바뀝니다. 인라인 코드·편집기에는 붙지 않고, 인쇄 시 숨겨지며, 설정과
+  무관하게 항상 표시됩니다.
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
 
