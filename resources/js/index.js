@@ -470,8 +470,10 @@
   }
 
   var previewCache = {}; // url -> Preview
+  var previewPending = {}; // url -> Promise (진행 중·429 재시도 대기 중, 같은 URL 은 요청을 공유)
   var inflight = 0;
   var fetchQueue = [];
+  var RETRY_LATER = {};
 
   function pump() {
     while (inflight < MAX_INFLIGHT && fetchQueue.length > 0) {
@@ -479,25 +481,62 @@
     }
   }
 
+  /**
+   * 429 의 Retry-After(초)로 재시도 대기 시간(ms)을 정한다. 재시도하지 않으면 null.
+   * 없음 → 2초, 10초 이하 → 그 값. 10초 초과·숫자 아님 → null. 둘 다 0~999ms 무작위 지연을 더한다.
+   */
+  function previewRetryDelay(retryAfter) {
+    var jitter = Math.floor(Math.random() * 1000);
+    if (retryAfter === null || retryAfter === undefined || String(retryAfter).trim() === '') return 2000 + jitter;
+    var v = String(retryAfter).trim();
+    if (!/^\d+$/.test(v)) return null;
+    var sec = parseInt(v, 10);
+    return sec > 10 ? null : sec * 1000 + jitter;
+  }
+
+  /** 요청 1회를 큐에 넣는다. 첫 429 는 캐시하지 않고 한 번만 다시 넣는다. */
+  function requestPreview(url, retried, finish) {
+    fetchQueue.push(function () {
+      inflight++;
+      var waitMs = null;
+      var done = function (p) {
+        inflight--;
+        finish(p);
+        pump();
+      };
+      fetch(API + '?url=' + encodeURIComponent(url), { headers: { Accept: 'application/json' } })
+        .then(function (r) {
+          if (r.status === 429 && !retried) {
+            waitMs = previewRetryDelay(r.headers.get('Retry-After'));
+            if (waitMs !== null) return RETRY_LATER;
+          }
+          return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status));
+        })
+        .then(function (p) {
+          if (p === RETRY_LATER) {
+            inflight--;
+            pump();
+            window.setTimeout(function () { requestPreview(url, true, finish); }, waitMs);
+            return;
+          }
+          done(p && typeof p === 'object' ? p : { status: 'failed' });
+        })
+        .catch(function () { done({ status: 'failed' }); });
+    });
+    pump();
+  }
+
   function getPreview(url) {
     if (previewCache[url]) return Promise.resolve(previewCache[url]);
-    return new Promise(function (resolve) {
-      var run = function () {
-        inflight++;
-        var done = function (p) {
-          previewCache[url] = p;
-          inflight--;
-          resolve(p);
-          pump();
-        };
-        fetch(API + '?url=' + encodeURIComponent(url), { headers: { Accept: 'application/json' } })
-          .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)); })
-          .then(function (p) { done(p && typeof p === 'object' ? p : { status: 'failed' }); })
-          .catch(function () { done({ status: 'failed' }); });
-      };
-      fetchQueue.push(run);
-      pump();
+    if (previewPending[url]) return previewPending[url];
+    previewPending[url] = new Promise(function (resolve) {
+      requestPreview(url, false, function (p) {
+        previewCache[url] = p;
+        delete previewPending[url];
+        resolve(p);
+      });
     });
+    return previewPending[url];
   }
 
   function applyCard(target, url, p, kind, cfg) {

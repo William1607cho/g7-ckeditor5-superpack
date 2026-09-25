@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Behind a reverse proxy**, set `TRUSTED_PROXIES` in the core `.env`. Otherwise
   every visitor is seen as the proxy's address and shares one link-preview
   allowance. Check it with `php artisan trusted-proxy:status`.
+- **A link card that gets a 429 is retried once instead of giving up.** The retry
+  waits for `Retry-After` (up to 10 seconds, or 2 seconds when the header is
+  missing) plus up to 1 second of jitter. Cards for the same address now share one
+  request.
 
 ### Fixed
 
