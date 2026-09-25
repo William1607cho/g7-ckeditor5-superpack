@@ -74,8 +74,11 @@
   function ensureObserver() {
     if (observer || typeof MutationObserver === 'undefined') return;
     observer = new MutationObserver(function (records) {
-      // 같은 변경 묶음에서 방문자 요청(조건부)이 먼저, 편집기 요청(무조건)이 그다음
-      if (hasContentAddition(records)) requestVisitorScan();
+      // 같은 변경 묶음에서 방문자 요청(조건부)이 먼저, 편집기 요청(무조건)이 그다음.
+      // 방문자 판정이 실패해도 편집기 요청은 막지 않는다.
+      var hit = false;
+      try { hit = hasContentAddition(records); } catch (e) { warnOnce('scan observer', e); }
+      if (hit) requestVisitorScan();
       requestEditorScan();
     });
     observer.observe(document.body, { childList: true, subtree: true });

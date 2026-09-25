@@ -94,7 +94,7 @@
       var s = sections[i];
       if (!isVisitorSection(s) || !s.visitor) continue;
       if (s.enabled && !s.enabled(cfg)) continue;
-      s.visitor(scope, cfg, ctx);
+      try { s.visitor(scope, cfg, ctx); } catch (e) { warnOnce('section ' + s.name + ' (visitor)', e); }
     }
   }
 
@@ -116,7 +116,7 @@
   /** 편집기 컨테이너 하나(편집기 인스턴스 확인 뒤)에 편집기 섹션을 editorOrder 순으로 */
   function runEditors(container) {
     for (var i = 0; i < editorSections.length; i++) {
-      if (editorSections[i].editor) editorSections[i].editor(container);
+      if (editorSections[i].editor) { try { editorSections[i].editor(container); } catch (e) { warnOnce('section ' + editorSections[i].name + ' (editor)', e); } }
     }
   }
 

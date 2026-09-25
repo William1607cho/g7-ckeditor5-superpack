@@ -43,10 +43,10 @@
     s.id = CODE_COPY_STYLE_ID;
     s.textContent = [
       // 첫 줄 위를 버튼 전용 띠로 비운다(원래 위 여백 + 36px). 화면만 바뀌고 저장·복사 텍스트에는 빈 줄이 없다.
-      // 원래 위 여백: 툴바 코드 블록 .8em(09a), 마크다운 코드 블록 12px(10).
+      // 원래 위 여백: 툴바·마크다운 코드 블록 모두 .8em(70, 1.6.0 에서 마크다운도 툴바 모양).
       '.ck-content pre[data-ck5sp-copy]{position:relative;}',
       '.ck-content pre[data-ck5sp-copy][data-ck5sp-copy]:not(.ck5-md-pre){padding-top:calc(.8em + 36px);}',
-      '.ck-content pre.ck5-md-pre[data-ck5sp-copy]{padding-top:calc(12px + 36px);}',
+      '.ck-content pre.ck5-md-pre[data-ck5sp-copy]{padding-top:calc(.8em + 36px);}',
       '.ck-content pre>.ck5sp-copy-btn{position:absolute;top:10px;right:.4em;z-index:1;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:6px;background:#e2e8f0;color:#334155;opacity:.5;cursor:pointer;font:inherit;line-height:1;transition:opacity .15s;}',
       '.ck-content pre>.ck5sp-copy-btn:hover,.ck-content pre>.ck5sp-copy-btn:focus-visible{opacity:1;}',
       '.ck-content pre>.ck5sp-copy-btn:focus-visible{outline:2px solid currentColor;outline-offset:1px;}',

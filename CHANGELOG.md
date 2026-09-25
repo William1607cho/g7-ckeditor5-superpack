@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Markdown code (inline and fenced blocks) now looks the same as toolbar code:
+  same size, spacing, colors, borders, dark mode, and the always-visible
+  horizontal scrollbar on long lines.
+
 ### Internal
 
 - The front-end pieces in `resources/js/src/` are renumbered into bands (`00`
@@ -21,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The page watcher is merged into one MutationObserver that requests viewer
   scans (200 ms, restarted on each change) and editor scans (250 ms, fixed
   window) with the same delays and order as before; behavior is unchanged.
+- If a feature throws (a section hook, the upload bar insert, image paste,
+  the upload-state hook, or the watcher's viewer check), only that feature is
+  skipped and a single console warning is logged; the rest keeps running.
 
 ## [1.5.0] - 2026-09-25
 

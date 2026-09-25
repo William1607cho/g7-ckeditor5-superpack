@@ -90,25 +90,30 @@
     }
   }
 
-  /** document 캡처 단계 paste 리스너를 1회만 등록한다. */
+  /** 붙여넣기 한 번: 등록된 편집 영역 안이고 이미지 바이너리가 있으면 가로채 업로드한다. */
+  function handleImagePaste(evt) {
+    for (var i = 0; i < pasteImageRoots.length; i++) {
+      var entry = pasteImageRoots[i];
+      if (!entry.domRoot || !entry.domRoot.isConnected || !entry.domRoot.contains(evt.target)) continue;
+
+      var cd = evt.clipboardData || (evt.originalEvent && evt.originalEvent.clipboardData);
+      var files = extractClipboardImageFiles(cd);
+      if (!files.length) return; // 바이너리 없음 → CKEditor5 기본 동작에 맡김
+
+      evt.preventDefault();
+      evt.stopPropagation();
+      if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
+      uploadPastedImages(entry.editor, files);
+      return;
+    }
+  }
+
+  /** document 캡처 단계 paste 리스너를 1회만 등록한다. 처리 중 예외는 이 기능만 건너뛴다. */
   function ensurePasteImageListener() {
     if (pasteImageListenerBound || typeof document === 'undefined') return;
     pasteImageListenerBound = true;
     document.addEventListener('paste', function (evt) {
-      for (var i = 0; i < pasteImageRoots.length; i++) {
-        var entry = pasteImageRoots[i];
-        if (!entry.domRoot || !entry.domRoot.isConnected || !entry.domRoot.contains(evt.target)) continue;
-
-        var cd = evt.clipboardData || (evt.originalEvent && evt.originalEvent.clipboardData);
-        var files = extractClipboardImageFiles(cd);
-        if (!files.length) return; // 바이너리 없음 → CKEditor5 기본 동작에 맡김
-
-        evt.preventDefault();
-        evt.stopPropagation();
-        if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
-        uploadPastedImages(entry.editor, files);
-        return;
-      }
+      try { handleImagePaste(evt); } catch (e) { warnOnce('image paste', e); }
     }, true);
   }
 

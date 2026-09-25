@@ -40,3 +40,12 @@
     return isBareUrlLink(only) ? only : null;
   }
 
+  var warnedTags = {}; // warnOnce 가 이미 알린 대상
+
+  /** 안전장치 공통: 예외로 건너뛴 대상(tag)을 console.warn 으로 한 번만 알린다(09a 방식, console.error 는 쓰지 않는다). */
+  function warnOnce(tag, reason) {
+    if (warnedTags[tag]) return;
+    warnedTags[tag] = true;
+    try { console.warn('[' + IDENTIFIER + '] ' + tag + ' skipped: ' + (reason && reason.message ? reason.message : reason)); } catch (e) {}
+  }
+

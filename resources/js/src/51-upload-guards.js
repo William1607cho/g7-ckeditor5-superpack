@@ -104,7 +104,7 @@
     var labelNode = null;
     var originalLabel = null; // null = 현재 "업로드중" 상태가 아님 (하드코딩 금지 — 실제 버튼 원문을 저장/복원)
 
-    pendingActions.on('change:hasAny', function (evt, name, value) {
+    function onHasAny(evt, name, value) {
       if (value) {
         if (originalLabel === null) {
           labelNode = findButtonLabelNode(btn);
@@ -117,7 +117,8 @@
         btn.disabled = false;
         originalLabel = null;
       }
-    });
+    }
+    try { pendingActions.on('change:hasAny', onHasAny); } catch (e) { warnOnce('upload state', e); }
   }
 
   /* ================================================================ *
