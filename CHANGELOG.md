@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   links and Markdown marks inside it stay as typed. No autoformat or shortcuts are
   added. A new *Code formatting* settings tab turns the buttons off (on by
   default); saved code is always styled for display (smaller monospace, soft
-  background, sideways scroll for long lines, dark-mode colors).
+  background, sideways scroll for long lines, dark-mode colors). The code block
+  button has no language arrow (plain text is the only language), and a code
+  block's horizontal scrollbar stays visible (8px, light and dark colors) so long
+  lines don't look cut off on macOS.
 
 ### Changed
 

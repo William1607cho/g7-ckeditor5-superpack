@@ -124,7 +124,20 @@
       + sel(block) + '{font-size:.9em;line-height:1.5;white-space:pre;overflow-x:auto;padding:.8em 1em;border-radius:6px;border:1px solid #e2e8f0;background:#f8fafc;color:#1e293b;}'
       + sel(block + '>code') + '{font-size:inherit;background:transparent;padding:0;color:inherit;white-space:inherit;}'
       + sel(inline, 'html.dark ') + '{background:#334155;color:#e2e8f0;}'
-      + sel(block, 'html.dark ') + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}';
+      + sel(block, 'html.dark ') + '{background:#0f172a;color:#e2e8f0;border-color:#334155;}'
+      // 가로 스크롤바를 항상 보이게(macOS 는 평소 숨김). 웹킷 규칙은 Chrome·Safari 용이다.
+      // Chrome 121+ 는 표준 scrollbar-* 가 있으면 웹킷 규칙을 무시하므로, 표준 속성은 Firefox 에만 준다.
+      + sel(block + '::-webkit-scrollbar') + '{height:8px;}'
+      + sel(block + '::-webkit-scrollbar-track') + '{background:#e2e8f0;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-thumb') + '{background:#64748b;border-radius:4px;}'
+      + sel(block + '::-webkit-scrollbar-track', 'html.dark ') + '{background:#1e293b;}'
+      + sel(block + '::-webkit-scrollbar-thumb', 'html.dark ') + '{background:#94a3b8;}'
+      + '@supports (-moz-appearance:none){'
+      + sel(block) + '{scrollbar-width:thin;scrollbar-color:#64748b #e2e8f0;}'
+      + sel(block, 'html.dark ') + '{scrollbar-color:#94a3b8 #1e293b;}'
+      + '}'
+      // 언어가 plaintext 하나라 코드 블록 split button 의 언어 목록 화살표는 쓸모가 없다(본문 에디터만).
+      + '.ckeditor5-wrapper .ck-code-block-dropdown .ck-splitbutton__arrow{display:none;}';
     (document.head || document.documentElement).appendChild(el);
   }
 
