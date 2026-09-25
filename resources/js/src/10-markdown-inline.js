@@ -55,8 +55,8 @@
       out = out.replace(/`([^`\n]+?)`/g, function (_, c) { return keep('<code data-ck5-mdc="1">' + c + '</code>'); });
     }
     if (cfg.mdLink) {
-      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, t, u) {
-        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + t + '</a>');
+      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, label, u) {
+        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
       });
     }
     if (cfg.mdBold) {

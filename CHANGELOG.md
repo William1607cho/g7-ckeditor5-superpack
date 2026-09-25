@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The front-end pieces in `resources/js/src/` are renumbered into bands (`00`
   head, `01`–`09` core, `10`–`79` features, `90` boot, `99` tail), and shared
   helpers move into core pieces. Code is only moved; behavior is unchanged.
+- Viewer-side features (Markdown, code copy, video, SNS embeds, link cards)
+  register themselves as sections, and the page scan calls them in a fixed
+  order; behavior is unchanged.
 
 ## [1.5.0] - 2026-09-25
 

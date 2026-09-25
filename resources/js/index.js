@@ -190,15 +190,104 @@
   }
 
   /* ================================================================ *
+   *  섹션 등록부 · 방문자 패스
+   * ================================================================ *
+   *  기능 섹션은 번들 평가 때 자기 조각 끝에서 `core.section(spec)` 으로 등록한다.
+   *  등록부는 이 IIFE 안에만 있고 window 에 올리지 않는다.
+   *  - 방문자 패스는 `order` 오름차순(같은 값은 등록 순)으로 섹션을 부른다. 결합 순서에 기대지 않는다.
+   *  - `gate(cfg)` 가 있는 섹션 중 하나라도 참이어야 `.ck-content` 를 돈다. 모두 거짓이면
+   *    게이트 없는 섹션만 root 에 한 번 부른다(1.5.0 scan 의 조기 반환과 같다).
+   *  - 받기만 하고 아직 부르지 않는 항목: editorOrder·settings·install·boot·editor·editorEnd·guard.
+   *  - `load` 는 'eager' 만 받는다(지연 로드는 자리만 둔다).
+   */
+
+  var sections = []; // 등록된 섹션 spec — 방문자 order 오름차순, order 없는 섹션은 뒤
+  var namespaces = {};
+
+  var core = {
+    id: IDENTIFIER,
+    section: registerSection,
+    ns: function (name) { return namespaces[name] || (namespaces[name] = {}); }
+  };
+
+  function isVisitorSection(spec) {
+    return spec.scope === 'visitor' || spec.scope === 'both';
+  }
+
+  function visitorOrderOf(spec) {
+    return isVisitorSection(spec) ? spec.order : Infinity;
+  }
+
+  function registerSection(spec) {
+    if (!spec || typeof spec.name !== 'string' || !spec.name) { logger.warn('section: name is required'); return; }
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].name === spec.name) { logger.warn('section: duplicate name ' + spec.name); return; }
+    }
+    if (spec.load !== undefined && spec.load !== 'eager') { logger.warn('section: only eager load is supported: ' + spec.name); return; }
+    if (isVisitorSection(spec) && typeof spec.order !== 'number') { logger.warn('section: visitor order is required: ' + spec.name); return; }
+    var at = sections.length;
+    while (at > 0 && visitorOrderOf(sections[at - 1]) > visitorOrderOf(spec)) at--;
+    sections.splice(at, 0, spec);
+  }
+
+  /** 방문자 스캔 한 번 동안 섹션끼리 나누는 표시. once 는 1.5.0 의 `if (!didX) { …; didX = true; }` 와 같다. */
+  function newVisitorContext() {
+    var flags = {};
+    return {
+      once: function (key, fn) {
+        if (flags[key]) return;
+        fn();
+        flags[key] = true;
+      },
+      has: function (key) { return !!flags[key]; }
+    };
+  }
+
+  /** 게이트가 있는 방문자 섹션 중 하나라도 켜져 있으면 true */
+  function visitorGateOpen(cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (isVisitorSection(s) && typeof s.gate === 'function' && s.gate(cfg)) return true;
+    }
+    return false;
+  }
+
+  /** 게이트가 닫혔을 때: 게이트 없는 방문자 섹션만 root 에 한 번씩 */
+  function runGateClosedVisitors(root, cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (isVisitorSection(s) && typeof s.gate !== 'function' && s.visitor) s.visitor(root, cfg, null);
+    }
+  }
+
+  /** `.ck-content` 하나(편집 영역 제외)에 켜진 방문자 섹션을 order 순으로 */
+  function runVisitors(scope, cfg, ctx) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (!isVisitorSection(s) || !s.visitor) continue;
+      if (s.enabled && !s.enabled(cfg)) continue;
+      s.visitor(scope, cfg, ctx);
+    }
+  }
+
+  /** 방문자 스캔 한 번이 끝난 뒤 */
+  function runVisitorEnds(ctx, cfg) {
+    for (var i = 0; i < sections.length; i++) {
+      var s = sections[i];
+      if (isVisitorSection(s) && s.visitorEnd) s.visitorEnd(ctx, cfg);
+    }
+  }
+
+  /* ================================================================ *
    *  통합 스캔
    * ================================================================ */
 
-  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
-
+  // 방문자 처리는 등록된 섹션을 order 순으로 부른다(06-registry). 섹션 순서: 마크다운 10 → 코드 복사 20
+  // → 동영상 30 → SNS 40 → 링크 카드 50.
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
-    if (!cfg.snsEnabled && !cfg.linkcardEnabled && !cfg.videoEnabled && !cfg.mdEnabled) { addCodeCopyButtons(root); return; }
+    if (!visitorGateOpen(cfg)) { runGateClosedVisitors(root, cfg); return; }
 
     var contents;
     try { contents = root.querySelectorAll('.ck-content'); } catch (e) { return; }
@@ -206,112 +295,15 @@
     if (!contents.length) contents = document.querySelectorAll('.ck-content');
     if (!contents.length) return;
 
-    var didEmbed = false;
-    var didCard = false;
-    var didVideo = false;
+    var ctx = newVisitorContext();
 
     for (var c = 0; c < contents.length; c++) {
       var scope = contents[c];
       if (isEditingArea(scope)) continue; // 편집 영역은 방문자 변환 대상이 아니다
-
-      /* ---- -1) 마크다운 문법 → 실제 서식 (다른 모든 패스보다 먼저) ---- */
-      // 링크가 실제 <a> 가 된 다음에 SNS/OG 카드 승격이 걸리도록 순서상 맨 앞.
-      if (cfg.mdEnabled) renderMarkdown(scope, cfg);
-      addCodeCopyButtons(scope);
-
-      /* ---- 0) 로컬 동영상 링크 → <video> 승격 ---- */
-      // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.
-      if (cfg.videoEnabled) {
-        var vAnchors = scope.querySelectorAll('a[href]');
-        for (var vi = 0; vi < vAnchors.length; vi++) {
-          var va = vAnchors[vi];
-          if (!videoIdOf(va.getAttribute('href') || va.href)) continue;
-          if (va.closest('.ck5-video')) continue;
-          var vblk = va.closest('p, div, figure');
-          if (vblk && vblk !== scope) vblk.dataset.ck5Lc = 'video';
-          if (!didVideo) { injectVideoStyle(); didVideo = true; }
-          promoteVideoAnchor(va);
-        }
-      }
-
-      /* ---- 1) SNS 임베드 패스 ---- */
-      // 1a. 레거시 <oembed url> (previewsInData:false 로 저장됐던 형태)
-      var oembeds = scope.querySelectorAll('oembed[url]');
-      for (var i = 0; i < oembeds.length; i++) {
-        var oe = oembeds[i];
-        var rawOe = (oe.getAttribute('url') || '').trim();
-        var figure = oe.closest('figure.media');
-        var tgt = figure || oe;
-        if (tgt.parentElement && tgt.parentElement.classList.contains(EMBED_WRAPPER_CLASS)) continue;
-        if (!rawOe) { if (figure) figure.remove(); else oe.remove(); continue; }
-        var poe = detectPlatform(rawOe);
-        if (poe === 'unknown' && !cfg.linkcardEnabled) continue; // 알수없음 + 카드 꺼짐 → 그대로
-        if (!didEmbed) { injectEmbedStyle(cfg); didEmbed = true; }
-        transformEmbed(tgt, rawOe, poe, cfg);
-      }
-
-      // 1b. 본문 단독 SNS 링크
-      var blocks = scope.querySelectorAll('p, div');
-      for (var b = 0; b < blocks.length; b++) {
-        var block = blocks[b];
-        if (block.dataset.ck5Lc) continue;
-        if (block.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
-        var link = soleLinkOf(block);
-        if (!link) continue;
-        var raw = link.href;
-        var platform = detectPlatform(raw);
-        if (platform === 'unknown') continue; // 링크 카드 패스에서 처리
-        // SNS 로 인식된 URL 은 (임베드하든 안 하든) 링크 카드 대상에서 제외 → 처리표시
-        block.dataset.ck5Lc = 'sns';
-        if (!didEmbed) { injectEmbedStyle(cfg); didEmbed = true; }
-        transformEmbed(block, raw, platform, cfg);
-      }
-
-      /* ---- 2) 링크 카드 패스 ---- */
-      if (!cfg.linkcardEnabled) continue;
-
-      var cardTargets = [];
-
-      // 2a. 본문 단독 일반 링크 (SNS 아님)
-      var lcBlocks = scope.querySelectorAll('p, div');
-      for (var k = 0; k < lcBlocks.length; k++) {
-        var lb = lcBlocks[k];
-        if (lb.dataset.ck5Lc) continue;
-        if (lb.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
-        var la = soleLinkOf(lb);
-        if (!la) continue;
-        if (detectPlatform(la.href) !== 'unknown') continue; // SNS 는 임베드 패스 소관
-        lb.dataset.ck5Lc = 'pending';
-        cardTargets.push({ url: la.href, replace: lb, kind: 'link' });
-      }
-
-      // 2b. 임베드 패스가 만든 미지원 폴백 래퍼 (레거시 <oembed> unknown 등)
-      var fbs = scope.querySelectorAll('.' + EMBED_WRAPPER_CLASS + '[data-ck5-embed-platform="unknown"]');
-      for (var f = 0; f < fbs.length; f++) {
-        var wrap = fbs[f];
-        if (wrap.dataset.ck5Lc) continue;
-        var fbLink = wrap.querySelector('a[href^="http"]');
-        if (!fbLink) continue;
-        wrap.dataset.ck5Lc = 'pending';
-        cardTargets.push({ url: fbLink.href, replace: wrap, kind: 'fallback' });
-      }
-
-      if (cardTargets.length) {
-        if (!didCard) { injectLinkCardStyle(cfg); didCard = true; }
-        cardTargets.forEach(function (tt) {
-          getPreview(tt.url).then(function (p) {
-            if (!tt.replace.isConnected) return;
-            applyCard(tt.replace, tt.url, p, tt.kind, cfg);
-          });
-        });
-      }
+      runVisitors(scope, cfg, ctx);
     }
 
-    if (didEmbed) {
-      // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
-      reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
-      reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
-    }
+    runVisitorEnds(ctx, cfg);
   }
 
   /* ================================================================ *
@@ -426,8 +418,8 @@
       out = out.replace(/`([^`\n]+?)`/g, function (_, c) { return keep('<code data-ck5-mdc="1">' + c + '</code>'); });
     }
     if (cfg.mdLink) {
-      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, t, u) {
-        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + t + '</a>');
+      out = out.replace(/\[([^\]\n]{1,200}?)\]\((https?:\/\/[^\s)]{1,500}?)\)/g, function (_, label, u) {
+        return keep('<a data-ck5-mda="1" href="' + u.replace(/"/g, '%22') + '" target="_blank" rel="noopener noreferrer">' + label + '</a>');
       });
     }
     if (cfg.mdBold) {
@@ -502,7 +494,7 @@
    * 기울임(`*x*`)은 기본 꺼짐. 사용자가 에디터 버튼으로 서식을 준 문단은 인라인 변환 스킵.
    */
   function renderMarkdown(scope, cfg) {
-    if (scope.closest('.ck-editor__editable, .ck-editor')) return; // 편집 중에는 변환 안 함
+    if (isEditingArea(scope)) return; // 편집 중에는 변환 안 함
 
     // 블록 패스 + 인라인 패스 모두 멱등(변환 요소에 data-ck5-md* 마커). 스캔마다 다시 돌아도
     // 이미 변환된 건 건너뛰므로, 콘텐츠가 뒤늦게/다시 렌더돼도 스스로 따라잡는다.
@@ -699,6 +691,18 @@
       mdApplyInline(ie, cfg);
     }
   }
+
+  // 다른 승격 패스보다 먼저 돌아 링크가 <a> 가 된 뒤 SNS/카드 패스가 걸리게 한다(order 10 = 맨 앞).
+  core.section({
+    name: 'markdown',
+    scope: 'visitor',
+    order: 10,
+    load: 'eager',
+    gate: function (cfg) { return cfg.mdEnabled; },
+    enabled: function (cfg) { return cfg.mdEnabled; },
+    styles: [MD_STYLE_ID],
+    visitor: renderMarkdown
+  });
 
   /* ================================================================ *
    *  SNS 임베드
@@ -990,6 +994,67 @@
   }
 
   /* ================================================================ *
+   *  SNS 임베드 — 방문자 패스 · 섹션 등록
+   * ================================================================ */
+
+  var reprocessTimers = []; // 임베드 재처리 타이머 id(scan 끝에서 갱신)
+
+  /** 방문자 패스: 레거시 <oembed> 와 본문 단독 SNS 링크를 임베드로 바꾼다. */
+  function snsEmbedVisitor(scope, cfg, ctx) {
+    // 1a. 레거시 <oembed url> (previewsInData:false 로 저장됐던 형태)
+    var oembeds = scope.querySelectorAll('oembed[url]');
+    for (var i = 0; i < oembeds.length; i++) {
+      var oe = oembeds[i];
+      var rawOe = (oe.getAttribute('url') || '').trim();
+      var figure = oe.closest('figure.media');
+      var tgt = figure || oe;
+      if (tgt.parentElement && tgt.parentElement.classList.contains(EMBED_WRAPPER_CLASS)) continue;
+      if (!rawOe) { if (figure) figure.remove(); else oe.remove(); continue; }
+      var poe = detectPlatform(rawOe);
+      if (poe === 'unknown' && !cfg.linkcardEnabled) continue; // 알수없음 + 카드 꺼짐 → 그대로
+      ctx.once('embed', function () { injectEmbedStyle(cfg); });
+      transformEmbed(tgt, rawOe, poe, cfg);
+    }
+
+    // 1b. 본문 단독 SNS 링크
+    var blocks = scope.querySelectorAll('p, div');
+    for (var b = 0; b < blocks.length; b++) {
+      var block = blocks[b];
+      if (block.dataset.ck5Lc) continue;
+      if (block.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
+      var link = soleLinkOf(block);
+      if (!link) continue;
+      var raw = link.href;
+      var platform = detectPlatform(raw);
+      if (platform === 'unknown') continue; // 링크 카드 패스에서 처리
+      // SNS 로 인식된 URL 은 (임베드하든 안 하든) 링크 카드 대상에서 제외 → 처리표시
+      block.dataset.ck5Lc = 'sns';
+      ctx.once('embed', function () { injectEmbedStyle(cfg); });
+      transformEmbed(block, raw, platform, cfg);
+    }
+  }
+
+  /** 방문자 스캔 끝: 이번 스캔에서 임베드를 만들었으면 재처리 타이머를 다시 잡는다. */
+  function snsEmbedVisitorEnd(ctx) {
+    if (!ctx.has('embed')) return;
+    // 마지막 스캔 기준 2·5·10초 한 벌만 둔다(스캔마다 겹쳐 쌓이지 않게)
+    reprocessTimers.forEach(function (id) { window.clearTimeout(id); });
+    reprocessTimers = [2000, 5000, 10000].map(function (ms) { return window.setTimeout(reprocessPresent, ms); });
+  }
+
+  // SNS 패스 자체는 snsEnabled 로 막지 않는다(플랫폼별 판단은 transformEmbed 안). snsEnabled 는 게이트에만 쓴다.
+  core.section({
+    name: 'sns-embed',
+    scope: 'visitor',
+    order: 40,
+    load: 'eager',
+    gate: function (cfg) { return cfg.snsEnabled; },
+    styles: [EMBED_STYLE_ID],
+    visitor: snsEmbedVisitor,
+    visitorEnd: snsEmbedVisitorEnd
+  });
+
+  /* ================================================================ *
    *  링크 카드
    * ================================================================ */
 
@@ -1187,6 +1252,56 @@
     document.head.appendChild(el);
   }
 
+  /** 방문자 패스: 단독 일반 링크와 임베드 패스의 미지원 폴백 래퍼를 링크 카드로 바꾼다(SNS 패스 뒤). */
+  function linkCardVisitor(scope, cfg, ctx) {
+    var cardTargets = [];
+
+    // 2a. 본문 단독 일반 링크 (SNS 아님)
+    var lcBlocks = scope.querySelectorAll('p, div');
+    for (var k = 0; k < lcBlocks.length; k++) {
+      var lb = lcBlocks[k];
+      if (lb.dataset.ck5Lc) continue;
+      if (lb.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
+      var la = soleLinkOf(lb);
+      if (!la) continue;
+      if (detectPlatform(la.href) !== 'unknown') continue; // SNS 는 임베드 패스 소관
+      lb.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: la.href, replace: lb, kind: 'link' });
+    }
+
+    // 2b. 임베드 패스가 만든 미지원 폴백 래퍼 (레거시 <oembed> unknown 등)
+    var fbs = scope.querySelectorAll('.' + EMBED_WRAPPER_CLASS + '[data-ck5-embed-platform="unknown"]');
+    for (var f = 0; f < fbs.length; f++) {
+      var wrap = fbs[f];
+      if (wrap.dataset.ck5Lc) continue;
+      var fbLink = wrap.querySelector('a[href^="http"]');
+      if (!fbLink) continue;
+      wrap.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: fbLink.href, replace: wrap, kind: 'fallback' });
+    }
+
+    if (cardTargets.length) {
+      ctx.once('card', function () { injectLinkCardStyle(cfg); });
+      cardTargets.forEach(function (tt) {
+        getPreview(tt.url).then(function (p) {
+          if (!tt.replace.isConnected) return;
+          applyCard(tt.replace, tt.url, p, tt.kind, cfg);
+        });
+      });
+    }
+  }
+
+  core.section({
+    name: 'link-card',
+    scope: 'visitor',
+    order: 50,
+    load: 'eager',
+    gate: function (cfg) { return cfg.linkcardEnabled; },
+    enabled: function (cfg) { return cfg.linkcardEnabled; },
+    styles: [LINKCARD_STYLE_ID],
+    visitor: linkCardVisitor
+  });
+
   /* ================================================================ *
    *  로컬 동영상 — 렌더 승격 (방문자 화면)
    * ================================================================ */
@@ -1268,6 +1383,32 @@
     }
     a.replaceWith(wrap);
   }
+
+  /** 방문자 패스: 로컬 동영상 링크 → <video> 승격 */
+  function videoRenderVisitor(scope, cfg, ctx) {
+    // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.
+    var vAnchors = scope.querySelectorAll('a[href]');
+    for (var vi = 0; vi < vAnchors.length; vi++) {
+      var va = vAnchors[vi];
+      if (!videoIdOf(va.getAttribute('href') || va.href)) continue;
+      if (va.closest('.ck5-video')) continue;
+      var vblk = va.closest('p, div, figure');
+      if (vblk && vblk !== scope) vblk.dataset.ck5Lc = 'video';
+      ctx.once('video', injectVideoStyle);
+      promoteVideoAnchor(va);
+    }
+  }
+
+  core.section({
+    name: 'video-render',
+    scope: 'visitor',
+    order: 30,
+    load: 'eager',
+    gate: function (cfg) { return cfg.videoEnabled; },
+    enabled: function (cfg) { return cfg.videoEnabled; },
+    styles: [VIDEO_STYLE_ID],
+    visitor: videoRenderVisitor
+  });
 
   /* ================================================================ *
    *  로컬 동영상 — 편집 화면 업로드 UI (관리자)
@@ -2347,6 +2488,16 @@
       try { attachCodeCopyButton(pre); } catch (e) { codeCopyWarn(e); }
     }
   }
+
+  // 게이트 없음: 다른 방문자 기능이 모두 꺼져 있어도 root 에 한 번 돈다(코드 복사는 설정 없이 항상 켜짐).
+  core.section({
+    name: 'code-copy',
+    scope: 'visitor',
+    order: 20,
+    load: 'eager',
+    styles: [CODE_COPY_STYLE_ID],
+    visitor: addCodeCopyButtons
+  });
 
   // 코어 ActionDispatcher 가 있으면 수동 트리거용 핸들러도 등록 (레이아웃 onMount 등에서 호출 가능)
   function registerHandlers(retry) {

@@ -80,3 +80,29 @@
     a.replaceWith(wrap);
   }
 
+  /** 방문자 패스: 로컬 동영상 링크 → <video> 승격 */
+  function videoRenderVisitor(scope, cfg, ctx) {
+    // 링크 텍스트(파일명일 수도, URL일 수도)와 무관하게 href 패턴만으로 잡는다.
+    var vAnchors = scope.querySelectorAll('a[href]');
+    for (var vi = 0; vi < vAnchors.length; vi++) {
+      var va = vAnchors[vi];
+      if (!videoIdOf(va.getAttribute('href') || va.href)) continue;
+      if (va.closest('.ck5-video')) continue;
+      var vblk = va.closest('p, div, figure');
+      if (vblk && vblk !== scope) vblk.dataset.ck5Lc = 'video';
+      ctx.once('video', injectVideoStyle);
+      promoteVideoAnchor(va);
+    }
+  }
+
+  core.section({
+    name: 'video-render',
+    scope: 'visitor',
+    order: 30,
+    load: 'eager',
+    gate: function (cfg) { return cfg.videoEnabled; },
+    enabled: function (cfg) { return cfg.videoEnabled; },
+    styles: [VIDEO_STYLE_ID],
+    visitor: videoRenderVisitor
+  });
+

@@ -150,3 +150,13 @@
     }
   }
 
+  // 게이트 없음: 다른 방문자 기능이 모두 꺼져 있어도 root 에 한 번 돈다(코드 복사는 설정 없이 항상 켜짐).
+  core.section({
+    name: 'code-copy',
+    scope: 'visitor',
+    order: 20,
+    load: 'eager',
+    styles: [CODE_COPY_STYLE_ID],
+    visitor: addCodeCopyButtons
+  });
+

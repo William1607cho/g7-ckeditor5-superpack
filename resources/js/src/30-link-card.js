@@ -196,3 +196,53 @@
     document.head.appendChild(el);
   }
 
+  /** 방문자 패스: 단독 일반 링크와 임베드 패스의 미지원 폴백 래퍼를 링크 카드로 바꾼다(SNS 패스 뒤). */
+  function linkCardVisitor(scope, cfg, ctx) {
+    var cardTargets = [];
+
+    // 2a. 본문 단독 일반 링크 (SNS 아님)
+    var lcBlocks = scope.querySelectorAll('p, div');
+    for (var k = 0; k < lcBlocks.length; k++) {
+      var lb = lcBlocks[k];
+      if (lb.dataset.ck5Lc) continue;
+      if (lb.closest('.ck5-linkcard, .' + EMBED_WRAPPER_CLASS)) continue;
+      var la = soleLinkOf(lb);
+      if (!la) continue;
+      if (detectPlatform(la.href) !== 'unknown') continue; // SNS 는 임베드 패스 소관
+      lb.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: la.href, replace: lb, kind: 'link' });
+    }
+
+    // 2b. 임베드 패스가 만든 미지원 폴백 래퍼 (레거시 <oembed> unknown 등)
+    var fbs = scope.querySelectorAll('.' + EMBED_WRAPPER_CLASS + '[data-ck5-embed-platform="unknown"]');
+    for (var f = 0; f < fbs.length; f++) {
+      var wrap = fbs[f];
+      if (wrap.dataset.ck5Lc) continue;
+      var fbLink = wrap.querySelector('a[href^="http"]');
+      if (!fbLink) continue;
+      wrap.dataset.ck5Lc = 'pending';
+      cardTargets.push({ url: fbLink.href, replace: wrap, kind: 'fallback' });
+    }
+
+    if (cardTargets.length) {
+      ctx.once('card', function () { injectLinkCardStyle(cfg); });
+      cardTargets.forEach(function (tt) {
+        getPreview(tt.url).then(function (p) {
+          if (!tt.replace.isConnected) return;
+          applyCard(tt.replace, tt.url, p, tt.kind, cfg);
+        });
+      });
+    }
+  }
+
+  core.section({
+    name: 'link-card',
+    scope: 'visitor',
+    order: 50,
+    load: 'eager',
+    gate: function (cfg) { return cfg.linkcardEnabled; },
+    enabled: function (cfg) { return cfg.linkcardEnabled; },
+    styles: [LINKCARD_STYLE_ID],
+    visitor: linkCardVisitor
+  });
+
