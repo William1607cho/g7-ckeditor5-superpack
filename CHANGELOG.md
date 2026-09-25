@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Copy button on code blocks.** Every code block in a viewed post — toolbar code
   blocks and Markdown ```` ``` ```` blocks — gets a small half-transparent copy
   button in its top-right corner (it stays there while the block scrolls sideways;
-  full opacity on hover or keyboard focus). It copies the code exactly as shown,
+  full opacity on hover or keyboard focus). The block's top padding grows by 36px
+  so the button sits in an empty strip above the first line and never covers long
+  lines; this is display only, no blank line is saved or copied. It copies the code exactly as shown,
   indentation and tabs included, using the Clipboard API with a hidden-textarea
   fallback, and shows a check mark for 1.5 seconds. Inline code gets no button, the
   editors (post and comment) get none, and the button is hidden when printing. It
