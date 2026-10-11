@@ -81,8 +81,8 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 cd /path/to/gnuboard7/plugins
 
 # a release tag (recommended)
-curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.6.0.tar.gz | tar xz
-mv g7-ckeditor5-superpack-1.6.0 g7-ckeditor5-superpack
+curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.6.1.tar.gz | tar xz
+mv g7-ckeditor5-superpack-1.6.1 g7-ckeditor5-superpack
 
 # ...or the latest main
 git clone https://github.com/William1607cho/g7-ckeditor5-superpack.git
@@ -494,6 +494,13 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
    together with both built files.
 6. Add the section to the order list above, the feature list and CHANGELOG.
 
+### Tests
+
+- `node --test tests/js/*.test.mjs` runs the shipped script on a fake editor. It needs a DOM from
+  `happy-dom`, which this repository does not install: set `HAPPY_DOM_FROM=<folder with happy-dom
+  installed>/package.json`. Without it the tests are skipped and print why. No network is used.
+- `tests/` is not included in release archives.
+
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
 **관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 7개, 기능별로 하나씩.
@@ -639,6 +646,13 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
    그다음 `readSettings()`(`01-settings.js`)에서 새 키를 읽습니다.
 5. `scripts/build-js.sh`, `scripts/build-js.sh --check`를 돌리고, 조각과 빌드된 두 파일을 함께 커밋합니다.
 6. 위 순서 목록, 기능 목록, CHANGELOG에 섹션을 적습니다.
+
+#### 테스트
+
+- `node --test tests/js/*.test.mjs` 는 배포 스크립트를 가짜 편집기 위에서 돌립니다. DOM 은 `happy-dom` 을 쓰는데
+  이 저장소에는 설치하지 않으므로 `HAPPY_DOM_FROM=<happy-dom 이 설치된 폴더>/package.json` 으로 알려 줍니다.
+  지정하지 않으면 사유를 출력하고 건너뜁니다. 네트워크는 쓰지 않습니다.
+- `tests/` 는 릴리스 아카이브에 들어가지 않습니다.
 
 ## Acknowledgments
 
