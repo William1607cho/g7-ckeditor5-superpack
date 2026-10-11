@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Icon-only submit buttons keep their icon while an image uploads.** During an
+  image upload (paste, screenshot paste, or the toolbar image button) the post
+  form's submit button is disabled and marked busy. The "Uploading" label is now
+  written only into an element that holds text alone (a label `span`, or a
+  text-only button). Before, a button with no label `span` had its whole
+  content replaced, which detached the template's icon: the icon vanished, and
+  saving then showed "component failed to load [Icon]" for a moment because the
+  page renderer could no longer find the node it owned. The tooltip (`title`,
+  `aria-label`) is left as it is, and the button's earlier disabled state is
+  restored when the upload ends.
+
+### Tests
+
+- `tests/js/upload-guards.test.mjs` runs the shipped script on a fake editor
+  with an icon-only button and with a labeled button (`node --test`, DOM from
+  `happy-dom` given by `HAPPY_DOM_FROM`; skipped when it cannot be found).
+
 ## [1.6.0] - 2026-09-25
 
 ### Changed

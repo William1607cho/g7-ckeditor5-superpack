@@ -67,9 +67,10 @@
    *  등록 버튼 "업로드중" 상태 전환 (위 제출 차단의 1차 방어로 승격)
    * ================================================================ *
    *  위 캡처+토스트 가드는 이제 "혹시 몰라 남겨두는" 이중 안전장치일 뿐이고,
-   *  주된 방어는 이 섹션 — 업로드 중에는 버튼 자체를 "업로드중"으로 바꾸고
-   *  비활성화해 클릭이 애초에 발생하지 않게 한다(정상 흐름에서는 위 토스트가
-   *  뜰 일이 없다 — 버튼이 이미 막혀 있으므로).
+   *  주된 방어는 이 섹션 — 업로드 중에는 버튼을 비활성화(aria-busy)해 클릭이
+   *  애초에 발생하지 않게 하고, 글자 문구가 있는 버튼이면 문구도 "업로드중"으로
+   *  바꾼다(정상 흐름에서는 위 토스트가 뜰 일이 없다 — 버튼이 이미 막혀 있으므로).
+   *  아이콘 전용 버튼은 문구를 바꾸지 않는다(findButtonLabelNode 주석).
    *
    *  여러 이미지가 동시에 업로드 중이어도 표준 `PendingActions.hasAny` 를
    *  그대로 신뢰한다 — `FileRepository` 는 `loaders` 컬렉션 길이가 0 으로
@@ -86,9 +87,25 @@
     return btns.length ? btns[btns.length - 1] : null;
   }
 
-  /** 버튼 안의 문구 텍스트 노드를 담은 요소를 찾는다(아이콘과 분리된 span 우선). */
+  /** 글자만 담은(자식 요소가 없고 글자가 있는) 요소면 true. */
+  function isTextOnly(el) {
+    return !!el && !el.firstElementChild && (el.textContent || '').trim() !== '';
+  }
+
+  /**
+   * 버튼 안에서 문구를 바꿔도 되는 요소를 찾는다. 없으면 null.
+   *
+   * 버튼의 자식은 템플릿 렌더러(React)가 관리한다. 요소를 품은 노드의 textContent 를 덮어쓰면
+   * React 가 아는 자식(아이콘 `<i>` 등)이 DOM 에서 떨어져 나가고, 다음 렌더에서 React 가 그 자식을
+   * 바꾸려다 removeChild 예외를 낸다(아이콘 전용 저장 버튼에서 실측 — 아이콘이 사라지고 저장 때
+   * "컴포넌트 로드 실패 [Icon]"). 그래서 글자만 담은 요소(문구 span, 또는 글자만 있는 버튼)일 때만 고르고,
+   * 아이콘 전용 버튼은 문구를 건드리지 않는다.
+   */
   function findButtonLabelNode(btn) {
-    return btn.querySelector('span') || btn;
+    var span = btn.querySelector('span');
+    if (isTextOnly(span)) return span;
+    if (isTextOnly(btn)) return btn;
+    return null;
   }
 
   /** 제출 버튼을 PendingActions.hasAny 에 묶어 "업로드중" 상태를 전환한다 (편집기당 1회). */
@@ -101,21 +118,24 @@
     try { pendingActions = editor.plugins.get('PendingActions'); } catch (e) { return; }
     if (!pendingActions) return;
 
-    var labelNode = null;
-    var originalLabel = null; // null = 현재 "업로드중" 상태가 아님 (하드코딩 금지 — 실제 버튼 원문을 저장/복원)
+    // 업로드 중에만 값이 있다. 문구·비활성은 실제 원래 값을 저장했다가 그대로 되돌린다(하드코딩 금지).
+    // 툴팁(title·aria-label)은 건드리지 않는다. 아이콘 전용 버튼은 비활성·aria-busy 만 바꾼다.
+    var busy = null; // null = 업로드중 상태 아님. { labelNode, label, disabled }
 
     function onHasAny(evt, name, value) {
       if (value) {
-        if (originalLabel === null) {
-          labelNode = findButtonLabelNode(btn);
-          originalLabel = labelNode.textContent;
+        if (busy === null) {
+          var labelNode = findButtonLabelNode(btn);
+          busy = { labelNode: labelNode, label: labelNode ? labelNode.textContent : null, disabled: btn.disabled };
         }
-        labelNode.textContent = t('editor.image.uploading_button_label', '업로드중');
+        if (busy.labelNode) busy.labelNode.textContent = t('editor.image.uploading_button_label', '업로드중');
         btn.disabled = true;
-      } else if (originalLabel !== null) {
-        labelNode.textContent = originalLabel;
-        btn.disabled = false;
-        originalLabel = null;
+        btn.setAttribute('aria-busy', 'true');
+      } else if (busy !== null) {
+        if (busy.labelNode && busy.labelNode.isConnected) busy.labelNode.textContent = busy.label;
+        btn.disabled = busy.disabled;
+        btn.removeAttribute('aria-busy');
+        busy = null;
       }
     }
     try { pendingActions.on('change:hasAny', onHasAny); } catch (e) { warnOnce('upload state', e); }
