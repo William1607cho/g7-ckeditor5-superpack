@@ -65,9 +65,10 @@ build's own Code / CodeBlock plugins to the post editor's config at creation tim
 Post view (`dist/js/view.js`) and writing helpers (`dist/js/write.js`) are separate
 files. The global script adds one `<script>` for them only when one of their features
 is on and the screen needs it (a post body on a post detail page / the post editor on a
-user write or edit page). With everything off, no extra file is requested. The
-writing-helper switches are not exposed to visitors: a signed-in user's write screen
-asks `GET /api/plugins/g7-ckeditor5-superpack/write-config`.
+user write or edit page for a signed-in user). With everything off, no extra file is
+requested. Only the six on/off switches of these features are exposed to the page
+settings (`view_toc_enabled`, `view_lightbox_enabled`, `view_fold_enabled`,
+`view_readtime_enabled`, `write_draft_enabled`, `write_count_enabled`).
 
 Turning a feature off in the settings makes the script skip that scan entirely.
 
@@ -420,10 +421,10 @@ text when there is no such row. This works with most templates, but check yours.
 Two switches, all off by default. They apply to **the post body editor on the user
 write and edit screens** (`/board/<slug>/write`, `/board/<slug>/<id>/edit`) for
 signed-in users — not the comment box (`g7-comment-editor`) or admin screens. When
-at least one is on, the write screen loads one extra small file (`dist/js/write.js`).
-The switches are not exposed to visitors; the write screen asks
-`GET /api/plugins/g7-ckeditor5-superpack/write-config` (signed-in users only) and
-keeps the answer for 10 minutes in the tab.
+at least one is on, the write screen of a signed-in user (the page's current user
+has a `uuid`) loads one extra small file (`dist/js/write.js`); with both off, nothing
+extra is requested. Only the two on/off values are exposed to the page settings;
+the draft limits below are fixed in the code.
 
 - **Draft autosave and restore** — the title and body are saved in this browser's
   `localStorage` 1.5 s after a change; reopening the form shows "a saved draft
@@ -505,7 +506,7 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
 | Band | Pieces | Contents |
 |---|---|---|
 | `00` | `00-head.js` | Opens the IIFE, `IDENTIFIER`, `logger` |
-| `01`–`09` | `01-settings`, `02-i18n`, `03-util`, `05-area`, `06-editors`, `06-registry`, `08-scheduler` | Core: settings (`readSettings`), `t`, shared helpers (`esc`, `authToken`, `warnOnce`, …), editing-area helpers, the section registry and the scheduler |
+| `01`–`09` | `01-settings`, `02-i18n`, `03-util`, `05-area`, `06-editors`, `06-registry`, `07-chunks`, `08-scheduler` | Core: settings (`readSettings`), `t`, shared helpers (`esc`, `authToken`, `warnOnce`, …), editing-area and post-editor / post-body checks, the section registry, lazy bundles and the scheduler with the shared visibility observer |
 | `10`–`79` | `10`/`11` Markdown, `20`/`21` SNS embeds, `30` link cards, `40`–`42` video, `50`/`51` image paste and upload guards, `60` editor style, `70` code formatting, `71` code copy | Feature sections. Ten numbers per feature; a one-digit step is a sub-file of the same feature |
 | `80`–`89` | — | Spare |
 | `90` | `90-boot.js` | Boot (`init`, handler registration, `window.__G7Ckeditor5Superpack`) |
@@ -563,17 +564,20 @@ global script:
   `load: 'chunk'` sections; both scans then run again. Chunk sections get no `boot`.
   Helpers a bundle can use from `core`: `t`, `esc`, `warnOnce`, `logger`,
   `readSettings`, `isEditingArea`, `editorInstanceNear`, `findMainBody`, `routeKind`,
-  `isPostEditorEl`, `authToken`, `whenVisible`, `writeConfig`, `ns`.
+  `isPostEditorEl`, `postEditorCss`, `currentUserUuid`, `writeWanted`, `whenVisible`,
+  `ns`.
 - **Shared visibility observer.** `core.whenVisible(el, fn)` calls `fn(el)` once when
   `el` comes within 400px of the viewport (one `IntersectionObserver` for all
   features; immediate without the API). Detached targets are released on each visitor
   scan.
 - **Editor config hooks.** `core.editorConfig(fn(el, cfg) → cfg)` adds a hook to the
-  `ClassicEditor.create` wrapper (code formatting is the first hook);
-  `core.editorConfigWait(fn(el) → Promise|null)` lets creation wait briefly (each hook
-  caps its own wait). The post editor is `div[id^="ckeditor5-"]` (sirsoft-ckeditor5
-  1.1) or the older `.ckeditor5-wrapper`; `isPostEditorEl()` excludes the comment
-  editor.
+  `ClassicEditor.create` wrapper (code formatting is the first hook, the character
+  count's WordCount the second).
+- **One post-editor check** (`05-area.js`). The post editor container is
+  `div[id^="ckeditor5-"]` (sirsoft-ckeditor5 1.1) or the older `.ckeditor5-wrapper`,
+  never inside the comment editor (`.g7ce-wrapper`). Every feature uses
+  `isPostEditorEl(el)`, `postEditorCss(suffix)` (CSS selectors) or
+  `postEditorContainers()`; do not write the selectors again elsewhere.
 - The scheduler (`08-scheduler.js`) owns the only MutationObserver (on
   `document.body`, `childList` + `subtree`). An added node that is, is inside, or
   contains `.ck-content` requests a visitor scan after 200 ms, restarted on every
@@ -719,7 +723,8 @@ global script:
   - 본문 판별: 템플릿이 본문(또는 그 조상)에 `data-g7-post-body` 속성이나 `g7-post-body` 클래스를 달면 그것을 씁니다.
     표식이 없으면 대부분의 템플릿에서 글 상세 주소의 "글 버튼 줄(`[data-g7-anchor="post-actions"]`) 앞 마지막 본문"으로 찾으니, 쓰는 템플릿에서 확인하세요.
 - **글쓰기 도우미**(1.7.0, 모두 기본 꺼짐) — 로그인한 사용자의 사용자 글쓰기·수정 화면 게시글 본문 에디터에만 적용됩니다(댓글 입력창·관리자 화면 제외).
-  이 설정은 방문자 화면 설정에 싣지 않고, 글쓰기 화면이 로그인 사용자 전용 주소로 묻습니다.
+  방문자 화면 설정에는 켜짐 여부 2개(`write_draft_enabled`·`write_count_enabled`)만 싣고, 로그인한 사용자의 글쓰기 화면에서만
+  작은 파일(`dist/js/write.js`) 하나를 더 불러옵니다(둘 다 끄면 추가 요청 없음). 글 보기 4개도 켜짐 여부만 싣습니다.
   - **임시 저장·복구**: 제목·본문을 이 브라우저에 저장하고 다시 열면 [복구]/[버리기]를 묻습니다. 등록하면 지워지고 7일 뒤 만료(글 하나 500KB, 최대 10개). 비밀글로 체크하면 저장하지 않고 남은 임시본도 지웁니다. 업로드 중에는 저장을 미룹니다(CKEditor Autosave 는 업로드 보호와 충돌해 쓰지 않음).
   - **글자 수 표시**: 에디터 아래에 "글자 N · 공백 제외 M"(빌드 내장 WordCount).
 
@@ -735,7 +740,7 @@ global script:
 | 대역 | 조각 | 내용 |
 |---|---|---|
 | `00` | `00-head.js` | IIFE 열기, `IDENTIFIER`, `logger` |
-| `01`~`09` | `01-settings`, `02-i18n`, `03-util`, `05-area`, `06-editors`, `06-registry`, `08-scheduler` | 코어: 설정(`readSettings`), `t`, 공용 도우미(`esc`·`authToken`·`warnOnce` 등), 편집 영역 도우미, 섹션 등록부, 스케줄러 |
+| `01`~`09` | `01-settings`, `02-i18n`, `03-util`, `05-area`, `06-editors`, `06-registry`, `07-chunks`, `08-scheduler` | 코어: 설정(`readSettings`), `t`, 공용 도우미(`esc`·`authToken`·`warnOnce` 등), 편집 영역·본문 에디터·글 본문 판정, 섹션 등록부, 지연 로드 묶음, 스케줄러와 공용 화면 진입 관찰자 |
 | `10`~`79` | `10`·`11` 마크다운, `20`·`21` SNS 임베드, `30` 링크 카드, `40`~`42` 동영상, `50`·`51` 이미지 붙여넣기·업로드 보호, `60` 에디터 스타일, `70` 코드 서식, `71` 코드 복사 | 기능 섹션. 기능마다 10 단위, 한 자리 차이는 같은 기능의 부속 파일 |
 | `80`~`89` | — | 예비 |
 | `90` | `90-boot.js` | 부팅(`init`, 핸들러 등록, `window.__G7Ckeditor5Superpack`) |
@@ -770,7 +775,9 @@ global script:
   이어서(글 보기 묶음, `visitorEnd`) `view-fold` 100 → `view-readtime` 110 → `view-toc` 120 → `view-lightbox` 130.
   편집기 `video-upload` 10 → `image-paste` 20 → `upload-guards` 30, 이어서(글쓰기 묶음) `write-draft` 40 → `write-count` 50.
   `editor-style`은 `boot`·`editorEnd`, `code-format`은 `install`을 씁니다. 다른 섹션의 결과를 읽는 섹션은 그보다 큰 순서 값을 씁니다.
-- 에디터 생성 설정 보강: `core.editorConfig(fn)`(코드 서식이 첫 항목), 생성 전 잠깐 기다릴 것 `core.editorConfigWait(fn)`.
+- 에디터 생성 설정 보강: `core.editorConfig(fn)`(코드 서식이 첫 항목, 글자 수의 WordCount 가 다음).
+- 본문 에디터 판정은 코어 한 곳(`05-area.js`의 `isPostEditorEl`·`postEditorCss`·`postEditorContainers`)만 씁니다. 선택자를 다른 곳에 다시 적지 않습니다.
+  (1.5.0~1.6.1 코드 서식·에디터 스타일은 `.ckeditor5-wrapper` 만 봐서 sirsoft-ckeditor5 1.1 에서 글쓰기 화면에 적용되지 않았습니다 — 1.7.0 에서 고침.)
   게시글 본문 에디터는 `div[id^="ckeditor5-"]`(sirsoft-ckeditor5 1.1) 또는 옛 `.ckeditor5-wrapper` 이고, 댓글 에디터는 제외합니다(`isPostEditorEl`).
 - 스케줄러(`08-scheduler.js`)가 유일한 MutationObserver(`document.body`, `childList` + `subtree`)를 가집니다.
   `.ck-content`이거나 그 안이거나 그것을 품은 노드가 추가되면 방문자 스캔을 200ms 뒤로 요청하고, 그런 변경마다 다시 잡습니다.

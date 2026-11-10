@@ -44,9 +44,10 @@ Planned as 1.7.0 (`plugin.json` and `composer.json` already say 1.7.0).
 - Post view and writing-helper code lives in two separate files (`dist/js/view.js`,
   `dist/js/write.js`) that are loaded only when one of their features is on and
   the screen needs it. With everything off, no extra file is requested.
-- `GET /api/plugins/g7-ckeditor5-superpack/write-config` (signed-in users only)
-  tells the write screen whether the writing helpers are on. These settings are
-  not put in the visitor page settings.
+- Six new settings are exposed to the page settings, on/off only:
+  `view_toc_enabled`, `view_lightbox_enabled`, `view_fold_enabled`,
+  `view_readtime_enabled`, `write_draft_enabled`, `write_count_enabled`. The
+  writing-helper file is loaded only for a signed-in user on the write screen.
 - Template authors can mark the post body with a `data-g7-post-body` attribute
   (or a `g7-post-body` class) on the body element or a wrapper. Without the marker
   the body is detected from the post detail route and the post action row.
@@ -63,6 +64,13 @@ Planned as 1.7.0 (`plugin.json` and `composer.json` already say 1.7.0).
 
 ### Fixed
 
+- **Code formatting buttons were missing since sirsoft-ckeditor5 1.1.** That version
+  no longer puts the `ckeditor5-wrapper` class on the editor container (only
+  `id="ckeditor5-<name>"`), and code formatting (1.5.0) looked for the class, so the
+  *Code* and *Code block* buttons were not added to the post editor. The editor-style
+  font size / line height and the code display style were not applied in the write
+  screen either. All features now share one post-editor check that accepts both
+  forms and still skips the comment editor.
 - **Link previews of non-UTF-8 pages** (EUC-KR, Shift_JIS, GBK, Big5, Latin-1, …)
   are converted to UTF-8 using the response or `<meta>` charset instead of showing
   replacement characters.
@@ -73,18 +81,21 @@ Planned as 1.7.0 (`plugin.json` and `composer.json` already say 1.7.0).
 - Sections may be registered from a lazy bundle (`load: 'chunk'`) through
   `window.__G7Ckeditor5Superpack.chunk(name, factory)`.
 - The `ClassicEditor.create` wrapper now applies a list of config hooks
-  (`core.editorConfig`, `core.editorConfigWait`); code formatting is the first.
+  (`core.editorConfig`); code formatting is the first, the character count's
+  WordCount plugin the second.
 - `scripts/build-js.sh` builds three bundles; `--check` covers all of them.
-- The post editor is found by the sirsoft-ckeditor5 1.1 container id
-  (`id="ckeditor5-<name>"`) as well as the older `ckeditor5-wrapper` class.
+- One post-editor check in the core (`isPostEditorEl`, `postEditorCss`,
+  `postEditorContainers`): the sirsoft-ckeditor5 1.1 container id
+  (`id="ckeditor5-<name>"`) or the older `ckeditor5-wrapper` class, never inside the
+  comment editor.
 
 ### Tests
 
 - PHP unit tests for the multicast ranges, `LinkPreviewCharset`,
-  `BotChallengeDetector`, settings consistency (eight places) and the route
-  limiter names. JS tests (`node --test`, no DOM) for the route kind, bundle URL,
-  table-of-contents model, fold markers, reading time, lightbox targets,
-  character count and draft keys.
+  `BotChallengeDetector` and settings consistency (eight places, exposed keys). JS
+  tests (`node --test`, no DOM) for the route kind, bundle URL, writing-helper
+  loading condition, code-formatting post-editor check, table-of-contents model,
+  fold markers, reading time, lightbox targets, character count and draft keys.
 
 ## [1.6.1] - 2026-10-11
 
