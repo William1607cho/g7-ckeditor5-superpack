@@ -7,7 +7,7 @@
    *    `change:data` 를 300ms 간격으로 센다.
    *  - 글자는 에디터 모델의 글자 노드를 모아 센다(문단 사이는 세지 않음). 이모지 등 합쳐진 글자는
    *    코드 포인트 단위다(순수 함수 `core.ns('count').countChars`).
-   *  - 댓글 에디터는 `.ckeditor5-wrapper` 밖이라 편집기 스캔 대상이 아니다.
+   *  - 댓글 에디터는 본문 에디터 컨테이너(코어 `isPostEditorEl`) 밖이라 편집기 스캔 대상이 아니다.
    */
   (function (core) {
     'use strict';

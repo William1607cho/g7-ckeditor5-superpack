@@ -22,13 +22,36 @@
    * ---------------------------------------------------------------- */
 
   /**
-   * 게시글 본문 에디터 컨테이너. sirsoft-ckeditor5 1.1 부터 컨테이너에 `ckeditor5-wrapper` 클래스가 없고
-   * `id="ckeditor5-<이름>"` 만 있다(1.0 은 클래스). 둘 다 받는다. 댓글 에디터(g7-comment-editor)는 제외.
+   * 게시글 본문 에디터 컨테이너 판정 — 모든 기능이 이것만 쓴다(1.7.0, 1.5.0 코드 서식·에디터 스타일 결함 수정).
+   * sirsoft-ckeditor5 1.1 부터 컨테이너에 `ckeditor5-wrapper` 클래스가 없고 `id="ckeditor5-<이름>"` 만 있다
+   * (1.0 은 클래스). 둘 다 받는다. 댓글 에디터(g7-comment-editor 의 `.g7ce-wrapper`)는 제외.
    */
-  var POST_EDITOR_SEL = '.ckeditor5-wrapper, div[id^="ckeditor5-"]';
+  var POST_EDITOR_SELECTORS = ['.ckeditor5-wrapper', 'div[id^="ckeditor5-"]'];
+  var POST_EDITOR_SEL = POST_EDITOR_SELECTORS.join(', ');
+  var COMMENT_EDITOR_SEL = '.g7ce-wrapper';
 
+  /** el 이 게시글 본문 에디터 컨테이너이거나 그 안이면 true(댓글 에디터 안은 false) */
   function isPostEditorEl(el) {
-    return !!(el && el.closest && el.closest(POST_EDITOR_SEL) && !el.closest('.g7ce-wrapper'));
+    return !!(el && el.closest && el.closest(POST_EDITOR_SEL) && !el.closest(COMMENT_EDITOR_SEL));
+  }
+
+  /** CSS 선택자 목록: 본문 에디터 컨테이너 각각 뒤에 suffix 를 붙여 쉼표로 잇는다(앞에 prefix). 순수 함수. */
+  function postEditorCss(suffix, prefix) {
+    return POST_EDITOR_SELECTORS.map(function (s) { return (prefix || '') + s + (suffix ? ' ' + suffix : ''); }).join(',');
+  }
+
+  /** 문서의 본문 에디터 컨테이너 중 편집 영역을 품은 바깥쪽 것들(겹치면 바깥 하나) */
+  function postEditorContainers(root) {
+    var list = (root || document).querySelectorAll(POST_EDITOR_SEL);
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!c.querySelector('.ck-editor__editable') || c.closest(COMMENT_EDITOR_SEL)) continue;
+      var parent = c.parentElement && c.parentElement.closest(POST_EDITOR_SEL);
+      if (parent && out.indexOf(parent) !== -1) continue;
+      out.push(c);
+    }
+    return out;
   }
 
   /** 템플릿 작성자용 본문 표식. 이 속성(또는 같은 이름의 클래스)이 본문 `.ck-content` 자신이나 조상에 있으면 그 본문만 쓴다. */

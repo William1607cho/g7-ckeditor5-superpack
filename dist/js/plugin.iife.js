@@ -198,13 +198,36 @@
    * ---------------------------------------------------------------- */
 
   /**
-   * 게시글 본문 에디터 컨테이너. sirsoft-ckeditor5 1.1 부터 컨테이너에 `ckeditor5-wrapper` 클래스가 없고
-   * `id="ckeditor5-<이름>"` 만 있다(1.0 은 클래스). 둘 다 받는다. 댓글 에디터(g7-comment-editor)는 제외.
+   * 게시글 본문 에디터 컨테이너 판정 — 모든 기능이 이것만 쓴다(1.7.0, 1.5.0 코드 서식·에디터 스타일 결함 수정).
+   * sirsoft-ckeditor5 1.1 부터 컨테이너에 `ckeditor5-wrapper` 클래스가 없고 `id="ckeditor5-<이름>"` 만 있다
+   * (1.0 은 클래스). 둘 다 받는다. 댓글 에디터(g7-comment-editor 의 `.g7ce-wrapper`)는 제외.
    */
-  var POST_EDITOR_SEL = '.ckeditor5-wrapper, div[id^="ckeditor5-"]';
+  var POST_EDITOR_SELECTORS = ['.ckeditor5-wrapper', 'div[id^="ckeditor5-"]'];
+  var POST_EDITOR_SEL = POST_EDITOR_SELECTORS.join(', ');
+  var COMMENT_EDITOR_SEL = '.g7ce-wrapper';
 
+  /** el 이 게시글 본문 에디터 컨테이너이거나 그 안이면 true(댓글 에디터 안은 false) */
   function isPostEditorEl(el) {
-    return !!(el && el.closest && el.closest(POST_EDITOR_SEL) && !el.closest('.g7ce-wrapper'));
+    return !!(el && el.closest && el.closest(POST_EDITOR_SEL) && !el.closest(COMMENT_EDITOR_SEL));
+  }
+
+  /** CSS 선택자 목록: 본문 에디터 컨테이너 각각 뒤에 suffix 를 붙여 쉼표로 잇는다(앞에 prefix). 순수 함수. */
+  function postEditorCss(suffix, prefix) {
+    return POST_EDITOR_SELECTORS.map(function (s) { return (prefix || '') + s + (suffix ? ' ' + suffix : ''); }).join(',');
+  }
+
+  /** 문서의 본문 에디터 컨테이너 중 편집 영역을 품은 바깥쪽 것들(겹치면 바깥 하나) */
+  function postEditorContainers(root) {
+    var list = (root || document).querySelectorAll(POST_EDITOR_SEL);
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!c.querySelector('.ck-editor__editable') || c.closest(COMMENT_EDITOR_SEL)) continue;
+      var parent = c.parentElement && c.parentElement.closest(POST_EDITOR_SEL);
+      if (parent && out.indexOf(parent) !== -1) continue;
+      out.push(c);
+    }
+    return out;
   }
 
   /** 템플릿 작성자용 본문 표식. 이 속성(또는 같은 이름의 클래스)이 본문 `.ck-content` 자신이나 조상에 있으면 그 본문만 쓴다. */
@@ -276,12 +299,11 @@
     // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
     // 확인하는 현재 구조가 버그 없이 이미 검증됨, 원복하지 않고 유지)
     try { ensureChunks(readSettings(), 'editor'); } catch (e) { warnOnce('chunks (editor)', e); }
-    var containers = document.querySelectorAll('.ckeditor5-wrapper, [id^="ckeditor5-"]');
+    // 본문 에디터 컨테이너(05-area 의 한 판정 — sirsoft 1.1 id 컨테이너·옛 클래스, 댓글 에디터 제외)
+    var containers = postEditorContainers(document);
     for (var i = 0; i < containers.length; i++) {
-      // 에디터가 실제로 붙었는지 확인 (editable 존재)
       var cont = containers[i];
-      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
-      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
+      if (!document.body.contains(cont)) continue;
       if (!editorInstanceNear(cont)) continue;
       runEditors(cont);
     }
@@ -518,6 +540,7 @@
   core.authToken = authToken;
   core.chunkUrl = chunkUrl;
   core.isPostEditorEl = isPostEditorEl;
+  core.postEditorCss = postEditorCss;
 
   /** 글 보기 기능 중 하나라도 켜져 있으면 true */
   function viewWanted(cfg) {
@@ -2692,8 +2715,8 @@
    *    CSS 는 그 아래 `.ck-editor__editable` 에 건다. 편집 루트(`getDomRoot()`)에
    *    직접 붙이면 CKEditor 렌더러가 포커스 전환 때 루트 class 를 다시 써서 표식이
    *    지워진다(1.5.0 에서 고침).
-   *    - 게시글 본문 에디터: `div.ckeditor5-wrapper` (sirsoft-ckeditor5
-   *      `html-editor.json` 의 고정 className 컨테이너, 편집기는 그 안에 생성)
+   *    - 게시글 본문 에디터: 코어 판정 `postEditorContainers()`(05-area) — sirsoft-ckeditor5 1.1 의
+   *      `div#ckeditor5-<이름>`, 1.0 의 `div.ckeditor5-wrapper`. 편집기는 그 안에 생성
    *    - 댓글 에디터: `div.g7ce-wrapper` (g7-comment-editor 가 만드는 컨테이너).
    *      "댓글에도 적용" 옵션이 켜져 있을 때만 붙인다.
    *    컨테이너는 안에 `.ck-editor__editable` 이 있을 때만 대상이다.
@@ -2752,21 +2775,24 @@
     document.head.appendChild(el);
   }
 
-  /** 편집기 바깥 컨테이너에 표식 클래스를 붙이거나 뗀다(안에 편집 영역이 있을 때만 붙임). */
-  function markEditorContainers(selector, marker, enabled) {
-    var list = document.querySelectorAll(selector);
+  /** 편집기 바깥 컨테이너 목록에 표식 클래스를 붙이거나 뗀다(안에 편집 영역이 있을 때만 붙임). */
+  function markEditorContainers(list, marker, enabled) {
     for (var i = 0; i < list.length; i++) {
       var want = enabled && !!list[i].querySelector('.ck-editor__editable');
       if (list[i].classList.contains(marker) !== want) list[i].classList.toggle(marker, want);
     }
   }
 
-  /** 본문 에디터·댓글 에디터 컨테이너의 표식을 설정에 맞춘다(멱등). */
+  /**
+   * 본문 에디터·댓글 에디터 컨테이너의 표식을 설정에 맞춘다(멱등).
+   * 본문 에디터는 코어 판정(`postEditorContainers`, 05-area)을 쓴다 — sirsoft-ckeditor5 1.1 은 `div.ckeditor5-wrapper`
+   * 가 없어 1.5.0~1.6.1 에서 글쓰기 화면 표식이 붙지 않았다(1.7.0 에서 고침).
+   */
   function applyEditorStyleMarkers() {
     var cfg = readSettings();
     var on = !!cfg.editorStyleEnabled;
-    markEditorContainers('div.ckeditor5-wrapper', EDITOR_STYLE_MARKER, on);
-    markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
+    markEditorContainers(postEditorContainers(document), EDITOR_STYLE_MARKER, on);
+    markEditorContainers(document.querySelectorAll('div.g7ce-wrapper'), COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
   }
 
   // 부팅 때 스타일 태그, 편집기 스캔 끝마다 표식(컨테이너 목록과 무관한 고정 구조).
@@ -2788,7 +2814,7 @@
    *  - UMD 는 `window.CKEDITOR = {}` 를 먼저 대입하고 `exports.ClassicEditor = …` 를 나중에
    *    채운다. 그래서 `window.CKEDITOR` 대입과 그 객체의 `ClassicEditor` 대입을 접근자로 잡아
    *    감싼다(이미 로드돼 있으면 바로 감싼다). g7-comment-editor 는 같은 ClassicEditor 를
-   *    쓰지만, 대상 요소가 `.ckeditor5-wrapper` 안이 아니므로 건드리지 않는다.
+   *    쓰지만, 대상 요소가 본문 에디터 컨테이너(코어 `isPostEditorEl`) 밖이므로 건드리지 않는다.
    *  - 어떤 예외도 에디터 생성을 막지 않는다: 원래 config 로 넘기고 console.warn 을 한 번만.
    *  - 저장된 코드의 표시 스타일은 설정과 무관하게 항상 넣는다(끄더라도 기존 글의 코드는 보여야 함).
    *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)도 같은 규칙을 쓴다(1.6.0, 툴바 코드 모양).
@@ -2815,7 +2841,9 @@
   /** 본문 에디터면 Code·CodeBlock·툴바 항목을 더한 config 복사본을, 아니면 원래 cfg 를 돌려준다. */
   function codeFormatConfig(el, cfg) {
     if (!codeFormatEnabled()) return cfg;
-    if (!el || !el.closest || !el.closest('.ckeditor5-wrapper')) return cfg;
+    // 본문 에디터 판정은 코어 한 곳(05-area isPostEditorEl). 1.5.0~1.6.1 은 `.ckeditor5-wrapper` 만 봐서
+    // sirsoft-ckeditor5 1.1(클래스 없음, id 컨테이너)에서 버튼이 들어가지 않았다(1.7.0 에서 고침).
+    if (!isPostEditorEl(el)) return cfg;
     var CK = window.CKEDITOR;
     if (!CK || !CK.Code || !CK.CodeBlock) { codeFormatWarn('Code/CodeBlock not found in the CKEditor build'); return cfg; }
     if (!cfg || !Array.isArray(cfg.plugins) || !cfg.toolbar || !Array.isArray(cfg.toolbar.items)) { codeFormatWarn('unexpected editor config'); return cfg; }
@@ -2907,7 +2935,7 @@
   /** 저장된 코드 표시 스타일(설정 무관, 1회). */
   function injectCodeStyle() {
     if (document.getElementById(CODE_STYLE_ID)) return;
-    var scopes = ['.ck-content.prose', '.ckeditor5-wrapper .ck-editor__editable'];
+    var scopes = ['.ck-content.prose'].concat(postEditorCss('.ck-editor__editable').split(','));
     var sel = function (suffix, prefix) {
       return scopes.map(function (s) { return (prefix || '') + s + ' ' + suffix; }).join(',');
     };
@@ -2935,7 +2963,7 @@
       + sel(block, 'html.dark ') + ',html.dark ' + mdBlock + '{scrollbar-color:#94a3b8 #1e293b;}'
       + '}'
       // 언어가 plaintext 하나라 코드 블록 split button 의 언어 목록 화살표는 쓸모가 없다(본문 에디터만).
-      + '.ckeditor5-wrapper .ck-code-block-dropdown .ck-splitbutton__arrow{display:none;}';
+      + postEditorCss('.ck-code-block-dropdown .ck-splitbutton__arrow') + '{display:none;}';
     (document.head || document.documentElement).appendChild(el);
   }
 

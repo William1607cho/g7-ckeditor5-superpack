@@ -22,8 +22,8 @@
    *    CSS 는 그 아래 `.ck-editor__editable` 에 건다. 편집 루트(`getDomRoot()`)에
    *    직접 붙이면 CKEditor 렌더러가 포커스 전환 때 루트 class 를 다시 써서 표식이
    *    지워진다(1.5.0 에서 고침).
-   *    - 게시글 본문 에디터: `div.ckeditor5-wrapper` (sirsoft-ckeditor5
-   *      `html-editor.json` 의 고정 className 컨테이너, 편집기는 그 안에 생성)
+   *    - 게시글 본문 에디터: 코어 판정 `postEditorContainers()`(05-area) — sirsoft-ckeditor5 1.1 의
+   *      `div#ckeditor5-<이름>`, 1.0 의 `div.ckeditor5-wrapper`. 편집기는 그 안에 생성
    *    - 댓글 에디터: `div.g7ce-wrapper` (g7-comment-editor 가 만드는 컨테이너).
    *      "댓글에도 적용" 옵션이 켜져 있을 때만 붙인다.
    *    컨테이너는 안에 `.ck-editor__editable` 이 있을 때만 대상이다.
@@ -82,21 +82,24 @@
     document.head.appendChild(el);
   }
 
-  /** 편집기 바깥 컨테이너에 표식 클래스를 붙이거나 뗀다(안에 편집 영역이 있을 때만 붙임). */
-  function markEditorContainers(selector, marker, enabled) {
-    var list = document.querySelectorAll(selector);
+  /** 편집기 바깥 컨테이너 목록에 표식 클래스를 붙이거나 뗀다(안에 편집 영역이 있을 때만 붙임). */
+  function markEditorContainers(list, marker, enabled) {
     for (var i = 0; i < list.length; i++) {
       var want = enabled && !!list[i].querySelector('.ck-editor__editable');
       if (list[i].classList.contains(marker) !== want) list[i].classList.toggle(marker, want);
     }
   }
 
-  /** 본문 에디터·댓글 에디터 컨테이너의 표식을 설정에 맞춘다(멱등). */
+  /**
+   * 본문 에디터·댓글 에디터 컨테이너의 표식을 설정에 맞춘다(멱등).
+   * 본문 에디터는 코어 판정(`postEditorContainers`, 05-area)을 쓴다 — sirsoft-ckeditor5 1.1 은 `div.ckeditor5-wrapper`
+   * 가 없어 1.5.0~1.6.1 에서 글쓰기 화면 표식이 붙지 않았다(1.7.0 에서 고침).
+   */
   function applyEditorStyleMarkers() {
     var cfg = readSettings();
     var on = !!cfg.editorStyleEnabled;
-    markEditorContainers('div.ckeditor5-wrapper', EDITOR_STYLE_MARKER, on);
-    markEditorContainers('div.g7ce-wrapper', COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
+    markEditorContainers(postEditorContainers(document), EDITOR_STYLE_MARKER, on);
+    markEditorContainers(document.querySelectorAll('div.g7ce-wrapper'), COMMENT_EDITOR_STYLE_MARKER, on && !!cfg.editorApplyToComments);
   }
 
   // 부팅 때 스타일 태그, 편집기 스캔 끝마다 표식(컨테이너 목록과 무관한 고정 구조).

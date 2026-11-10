@@ -79,6 +79,7 @@
   core.authToken = authToken;
   core.chunkUrl = chunkUrl;
   core.isPostEditorEl = isPostEditorEl;
+  core.postEditorCss = postEditorCss;
 
   /** 글 보기 기능 중 하나라도 켜져 있으면 true */
   function viewWanted(cfg) {

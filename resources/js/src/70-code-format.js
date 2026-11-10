@@ -7,7 +7,7 @@
    *  - UMD 는 `window.CKEDITOR = {}` 를 먼저 대입하고 `exports.ClassicEditor = …` 를 나중에
    *    채운다. 그래서 `window.CKEDITOR` 대입과 그 객체의 `ClassicEditor` 대입을 접근자로 잡아
    *    감싼다(이미 로드돼 있으면 바로 감싼다). g7-comment-editor 는 같은 ClassicEditor 를
-   *    쓰지만, 대상 요소가 `.ckeditor5-wrapper` 안이 아니므로 건드리지 않는다.
+   *    쓰지만, 대상 요소가 본문 에디터 컨테이너(코어 `isPostEditorEl`) 밖이므로 건드리지 않는다.
    *  - 어떤 예외도 에디터 생성을 막지 않는다: 원래 config 로 넘기고 console.warn 을 한 번만.
    *  - 저장된 코드의 표시 스타일은 설정과 무관하게 항상 넣는다(끄더라도 기존 글의 코드는 보여야 함).
    *    마크다운 변환 코드(`code[data-ck5-mdc]`, `pre.ck5-md-pre`)도 같은 규칙을 쓴다(1.6.0, 툴바 코드 모양).
@@ -34,7 +34,9 @@
   /** 본문 에디터면 Code·CodeBlock·툴바 항목을 더한 config 복사본을, 아니면 원래 cfg 를 돌려준다. */
   function codeFormatConfig(el, cfg) {
     if (!codeFormatEnabled()) return cfg;
-    if (!el || !el.closest || !el.closest('.ckeditor5-wrapper')) return cfg;
+    // 본문 에디터 판정은 코어 한 곳(05-area isPostEditorEl). 1.5.0~1.6.1 은 `.ckeditor5-wrapper` 만 봐서
+    // sirsoft-ckeditor5 1.1(클래스 없음, id 컨테이너)에서 버튼이 들어가지 않았다(1.7.0 에서 고침).
+    if (!isPostEditorEl(el)) return cfg;
     var CK = window.CKEDITOR;
     if (!CK || !CK.Code || !CK.CodeBlock) { codeFormatWarn('Code/CodeBlock not found in the CKEditor build'); return cfg; }
     if (!cfg || !Array.isArray(cfg.plugins) || !cfg.toolbar || !Array.isArray(cfg.toolbar.items)) { codeFormatWarn('unexpected editor config'); return cfg; }
@@ -126,7 +128,7 @@
   /** 저장된 코드 표시 스타일(설정 무관, 1회). */
   function injectCodeStyle() {
     if (document.getElementById(CODE_STYLE_ID)) return;
-    var scopes = ['.ck-content.prose', '.ckeditor5-wrapper .ck-editor__editable'];
+    var scopes = ['.ck-content.prose'].concat(postEditorCss('.ck-editor__editable').split(','));
     var sel = function (suffix, prefix) {
       return scopes.map(function (s) { return (prefix || '') + s + ' ' + suffix; }).join(',');
     };
@@ -154,7 +156,7 @@
       + sel(block, 'html.dark ') + ',html.dark ' + mdBlock + '{scrollbar-color:#94a3b8 #1e293b;}'
       + '}'
       // 언어가 plaintext 하나라 코드 블록 split button 의 언어 목록 화살표는 쓸모가 없다(본문 에디터만).
-      + '.ckeditor5-wrapper .ck-code-block-dropdown .ck-splitbutton__arrow{display:none;}';
+      + postEditorCss('.ck-code-block-dropdown .ck-splitbutton__arrow') + '{display:none;}';
     (document.head || document.documentElement).appendChild(el);
   }
 

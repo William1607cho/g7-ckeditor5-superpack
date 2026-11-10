@@ -6,12 +6,11 @@
     // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
     // 확인하는 현재 구조가 버그 없이 이미 검증됨, 원복하지 않고 유지)
     try { ensureChunks(readSettings(), 'editor'); } catch (e) { warnOnce('chunks (editor)', e); }
-    var containers = document.querySelectorAll('.ckeditor5-wrapper, [id^="ckeditor5-"]');
+    // 본문 에디터 컨테이너(05-area 의 한 판정 — sirsoft 1.1 id 컨테이너·옛 클래스, 댓글 에디터 제외)
+    var containers = postEditorContainers(document);
     for (var i = 0; i < containers.length; i++) {
-      // 에디터가 실제로 붙었는지 확인 (editable 존재)
       var cont = containers[i];
-      // 본문 안에서 편집 영역을 실제로 품은 요소만(head 의 ckeditor5-* link·style·script 제외)
-      if (!document.body.contains(cont) || !cont.querySelector('.ck-editor__editable')) continue;
+      if (!document.body.contains(cont)) continue;
       if (!editorInstanceNear(cont)) continue;
       runEditors(cont);
     }
