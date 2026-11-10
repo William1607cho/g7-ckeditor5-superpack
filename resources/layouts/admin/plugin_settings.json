@@ -106,7 +106,7 @@
                         "id": "tab_bar",
                         "type": "basic",
                         "name": "Div",
-                        "props": { "className": "mt-6 flex gap-1 border-b border-gray-200 dark:border-gray-700" },
+                        "props": { "className": "mt-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700" },
                         "children": [
                             {
                                 "id": "tab_btn_sns",
@@ -211,6 +211,36 @@
                                 ],
                                 "children": [
                                     { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.codeformat" }
+                                ]
+                            },
+                            {
+                                "id": "tab_btn_view",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'view' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "view" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.view" }
+                                ]
+                            },
+                            {
+                                "id": "tab_btn_write",
+                                "type": "basic",
+                                "name": "Button",
+                                "props": {
+                                    "type": "button",
+                                    "className": "px-4 py-2 -mb-px text-sm font-medium border-b-2 {{_local.ui?.tab === 'write' ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}}"
+                                },
+                                "actions": [
+                                    { "type": "click", "handler": "setState", "params": { "target": "local", "ui.tab": "write" } }
+                                ],
+                                "children": [
+                                    { "type": "basic", "name": "Span", "text": "$t:g7-ckeditor5-superpack.settings.tabs.write" }
                                 ]
                             }
                         ]
@@ -674,6 +704,112 @@
                     },
 
                     {
+                        "id": "panel_view",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'view'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.view.intro" },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "view_toc_enabled", "type": "checkbox", "name": "view_toc_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "view_toc_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_toc_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_toc_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "view_lightbox_enabled", "type": "checkbox", "name": "view_lightbox_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "view_lightbox_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_lightbox_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_lightbox_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "view_fold_enabled", "type": "checkbox", "name": "view_fold_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "view_fold_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_fold_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_fold_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "view_readtime_enabled", "type": "checkbox", "name": "view_readtime_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "view_readtime_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_readtime_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.view_readtime_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
+                        "id": "panel_write",
+                        "type": "basic",
+                        "name": "Div",
+                        "if": "{{_local.ui?.tab === 'write'}}",
+                        "props": { "className": "mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6" },
+                        "children": [
+                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.write.intro" },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "write_draft_enabled", "type": "checkbox", "name": "write_draft_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "write_draft_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.write_draft_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.write_draft_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "basic",
+                                "name": "Div",
+                                "props": { "className": "flex items-start gap-3" },
+                                "children": [
+                                    { "type": "basic", "name": "Input", "props": { "id": "write_count_enabled", "type": "checkbox", "name": "write_count_enabled", "className": "mt-1 h-4 w-4 rounded text-blue-600" } },
+                                    {
+                                        "type": "basic", "name": "Div", "children": [
+                                            { "type": "basic", "name": "Label", "props": { "htmlFor": "write_count_enabled", "className": "form-label" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.write_count_enabled.label" },
+                                            { "type": "basic", "name": "P", "props": { "className": "form-hint" }, "text": "$t:g7-ckeditor5-superpack.settings.fields.write_count_enabled.hint" }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+
+                    {
                         "id": "footer_buttons",
                         "type": "basic",
                         "name": "Div",
@@ -767,6 +903,12 @@
         "editor_apply_to_comments": { "type": "boolean", "default": false },
         "imagepaste_enabled": { "type": "boolean", "default": true },
         "imagepaste_webp_enabled": { "type": "boolean", "default": true },
-        "codeformat_enabled": { "type": "boolean", "default": true }
+        "codeformat_enabled": { "type": "boolean", "default": true },
+        "view_toc_enabled": { "type": "boolean", "default": false },
+        "view_lightbox_enabled": { "type": "boolean", "default": false },
+        "view_fold_enabled": { "type": "boolean", "default": false },
+        "view_readtime_enabled": { "type": "boolean", "default": false },
+        "write_draft_enabled": { "type": "boolean", "default": false },
+        "write_count_enabled": { "type": "boolean", "default": false }
     }
 }

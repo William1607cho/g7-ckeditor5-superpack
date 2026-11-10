@@ -1,7 +1,7 @@
 {
     "_meta": {
         "version": "1.0.0",
-        "description": "CKEditor 5 슈퍼팩 플러그인 환경설정 (SNS 임베드 / 외부 링크 카드 / 로컬 동영상 업로드 / 마크다운 자동 변환 / 에디터 스타일)"
+        "description": "CKEditor 5 슈퍼팩 플러그인 환경설정 (SNS 임베드 / 외부 링크 카드 / 로컬 동영상 업로드 / 마크다운 자동 변환 / 에디터 스타일 / 이미지 복붙 / 코드 서식 / 글 보기 / 글쓰기 도우미)"
     },
     "defaults": {
         "sns_enabled": true,
@@ -38,7 +38,13 @@
         "editor_apply_to_comments": false,
         "imagepaste_enabled": true,
         "imagepaste_webp_enabled": true,
-        "codeformat_enabled": true
+        "codeformat_enabled": true,
+        "view_toc_enabled": false,
+        "view_lightbox_enabled": false,
+        "view_fold_enabled": false,
+        "view_readtime_enabled": false,
+        "write_draft_enabled": false,
+        "write_count_enabled": false
     },
     "frontend_schema": {
         "sns_enabled": {
@@ -145,6 +151,24 @@
         },
         "codeformat_enabled": {
             "expose": true
+        },
+        "view_toc_enabled": {
+            "expose": true
+        },
+        "view_lightbox_enabled": {
+            "expose": true
+        },
+        "view_fold_enabled": {
+            "expose": true
+        },
+        "view_readtime_enabled": {
+            "expose": true
+        },
+        "write_draft_enabled": {
+            "expose": false
+        },
+        "write_count_enabled": {
+            "expose": false
         }
     }
 }

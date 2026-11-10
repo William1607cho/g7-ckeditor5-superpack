@@ -383,6 +383,40 @@ class Plugin extends AbstractPlugin
                 ['ko' => '코드 서식 버튼 사용', 'en' => 'Enable Code Formatting Buttons'],
                 ['ko' => '켜면 게시글 본문 에디터 툴바에 인라인 코드·코드 블록 버튼이 생깁니다. 끄면 버튼만 사라지고, 이미 작성한 글의 코드는 그대로 보입니다.', 'en' => 'When on, the post editor toolbar gets inline code and code block buttons. When off, only the buttons go away; code in existing posts still displays as before.'],
             ),
+
+            // ---- 탭 8: 글 보기 (1.7.0, 모두 기본 꺼짐 — 글 상세 화면의 글 본문에만) ----
+            'view_toc_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '목차', 'en' => 'Table of Contents'],
+                ['ko' => '본문의 제목(툴바 제목·마크다운 제목)이 3개 이상이면 본문 첫머리에 목차를 만들고, 누르면 그 제목으로 이동합니다.', 'en' => 'When the body has 3 or more headings (toolbar or Markdown), a table of contents is added at the top of the body; clicking an entry scrolls to that heading.'],
+            ),
+            'view_lightbox_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '이미지 확대 보기', 'en' => 'Image Lightbox'],
+                ['ko' => '본문 이미지를 누르면 새 탭 대신 화면 위에 크게 보여 주고, 좌우 버튼·키보드 화살표·밀기로 본문의 다른 이미지로 넘깁니다. 다른 주소로 직접 건 링크 이미지는 건드리지 않습니다.', 'en' => 'Clicking a body image shows it large over the page instead of a new tab; arrows, keyboard and swipe move between the body images. Images linked to another address are left alone.'],
+            ),
+            'view_fold_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '접기/펼치기', 'en' => 'Collapsible Sections'],
+                ['ko' => '본문에 "[접기] 제목" 한 줄과 "[/접기]" 한 줄로 감싼 부분을 접힌 상자로 보여 줍니다. 끄면 기존 글에 표식 글자가 그대로 보입니다.', 'en' => 'A part wrapped by a "[접기] title" line and a "[/접기]" line is shown as a collapsed box. When off, existing posts show the marker text as-is.'],
+            ),
+            'view_readtime_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '읽는 시간', 'en' => 'Reading Time'],
+                ['ko' => '본문 첫머리에 "약 N분" 읽는 시간을 한 줄로 보여 줍니다(한국어 1분 500자 기준).', 'en' => 'Shows an "about N min read" line at the top of the body (500 Korean characters or 200 words per minute).'],
+            ),
+
+            // ---- 탭 9: 글쓰기 도우미 (1.7.0, 모두 기본 꺼짐 — 사용자 글쓰기·수정 화면의 본문 에디터에만) ----
+            'write_draft_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '임시 저장·복구', 'en' => 'Draft Autosave and Restore'],
+                ['ko' => '로그인한 사용자가 글을 쓰는 동안 제목·본문을 이 브라우저에 임시 저장하고, 다시 열면 복구할지 묻습니다. 등록하면 지워지고 7일 뒤 만료됩니다. 비밀글은 저장하지 않습니다.', 'en' => 'While a signed-in user writes, the title and body are saved in this browser; reopening the form offers to restore them. Drafts are removed on submit and expire after 7 days. Private posts are not saved.'],
+            ),
+            'write_count_enabled' => $this->booleanSetting(
+                false,
+                ['ko' => '글자 수 표시', 'en' => 'Character Count'],
+                ['ko' => '게시글 본문 에디터 아래에 글자 수(공백 포함·제외)를 보여 줍니다.', 'en' => 'Shows the character count (with and without spaces) under the post body editor.'],
+            ),
         ];
     }
 
@@ -429,6 +463,12 @@ class Plugin extends AbstractPlugin
             'imagepaste_enabled' => true,
             'imagepaste_webp_enabled' => true,
             'codeformat_enabled' => true,
+            'view_toc_enabled' => false,
+            'view_lightbox_enabled' => false,
+            'view_fold_enabled' => false,
+            'view_readtime_enabled' => false,
+            'write_draft_enabled' => false,
+            'write_count_enabled' => false,
         ];
     }
 

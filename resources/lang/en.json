@@ -52,7 +52,9 @@
             "md": "Markdown auto-convert",
             "editorstyle": "Editor style",
             "imagepaste": "Image paste",
-            "codeformat": "Code formatting"
+            "codeformat": "Code formatting",
+            "view": "Post view",
+            "write": "Writing helpers"
         },
         "sns": {
             "intro": "When a YouTube, X (Twitter), Instagram or TikTok link is pasted on its own line, it is shown as a playable embed on the visitor-facing page.",
@@ -191,7 +193,37 @@
             "codeformat_enabled": {
                 "label": "Enable code formatting buttons",
                 "hint": "When on, the post editor toolbar gets inline code and code block buttons. When off, only the buttons go away; code in existing posts still displays as before."
+            },
+            "view_toc_enabled": {
+                "label": "Table of contents",
+                "hint": "When the body has 3 or more headings (toolbar or Markdown), a collapsible table of contents is added at the top of the body; clicking an entry scrolls to that heading."
+            },
+            "view_lightbox_enabled": {
+                "label": "Image lightbox",
+                "hint": "Clicking a body image shows it large over the page instead of opening a new tab; buttons, arrow keys and swipes move between the body images. Images linked to another address are left alone."
+            },
+            "view_fold_enabled": {
+                "label": "Collapsible sections",
+                "hint": "A part wrapped by a \"[접기] title\" line and a \"[/접기]\" line (each on its own line) is shown as a collapsed box. When off, existing posts show the marker text as-is."
+            },
+            "view_readtime_enabled": {
+                "label": "Reading time",
+                "hint": "Shows an \"about N min read\" line at the top of the body (500 Korean characters, 200 words or one image per 6 seconds)."
+            },
+            "write_draft_enabled": {
+                "label": "Draft autosave and restore",
+                "hint": "While a signed-in user writes, the title and body are saved in this browser; reopening the form offers to restore them. Drafts are removed on submit and expire after 7 days (500 KB per post, 10 drafts at most). Checking the private-post option stops saving and removes the draft."
+            },
+            "write_count_enabled": {
+                "label": "Character count",
+                "hint": "Shows the character count (with and without spaces) under the post body editor. Not shown in the comment box."
             }
+        },
+        "view": {
+            "intro": "Applies to the post body on the post detail screen only (not pages, the original-post box of a reply, terms dialogs or comments). All off by default; when any is on, one small extra script file is loaded on post pages."
+        },
+        "write": {
+            "intro": "Applies to the post body editor on the user write and edit screens only (not the comment box or admin screens). All off by default; when any is on, one small extra script file is loaded on write screens."
         },
         "md": {
             "intro": "Text pasted from an AI assistant (ChatGPT, etc.) often keeps literal markdown marks like `##` or `**bold**` instead of real formatting. When this is on, those marks are turned into real formatting (headings, bold, lists, …) as the visitor views the post. The stored text is left untouched — conversion happens only at render time and never touches the editor.",
