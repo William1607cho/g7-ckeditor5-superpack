@@ -211,6 +211,7 @@
       + W + '__yt{position:relative;width:100%;max-width:720px;margin:0 auto;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;}'
       + W + '__yt--shorts{max-width:300px;aspect-ratio:' + cfg.shortsRatio + ';}'
       + W + '__yt>iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}'
+      + W + '[data-ck5-embed-wait] blockquote{min-height:120px;}'
       + W + '__notice{color:#6b7280;font-size:.875rem;line-height:1.5;margin-bottom:.35em;}'
       + 'html.dark ' + W + '__notice{color:#9ca3af;}'
       + W + '__foot{margin-top:.65em;text-align:center;line-height:1;}'
@@ -271,7 +272,12 @@
     target.replaceWith(wrapper);
 
     if (platform === 'twitter' || platform === 'instagram' || platform === 'tiktok') {
-      queuePlatform(platform);
+      // 외부 스크립트는 그 임베드가 화면 가까이 왔을 때 부른다(1.7.0, 공용 관찰자). 그 전에는 링크 자리만 있다.
+      wrapper.setAttribute('data-ck5-embed-wait', '1');
+      whenVisible(wrapper, function () {
+        wrapper.removeAttribute('data-ck5-embed-wait');
+        queuePlatform(platform);
+      });
     }
   }
 

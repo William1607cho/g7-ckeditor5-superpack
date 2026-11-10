@@ -19,6 +19,10 @@
       + '.ck5-video>video{max-width:100%;width:640px;max-height:70vh;border-radius:10px;background:#000;display:block;margin:0 auto;}'
       + '.ck5-video[data-size="sm"]>video{width:360px;}'
       + '.ck5-video[data-size="lg"]>video{width:960px;}'
+      // 화면에 오기 전 자리(1.7.0) — 플레이어와 같은 폭·16:9 로 자리를 잡아 둔다
+      + '.ck5-video__ph{max-width:100%;width:640px;aspect-ratio:16/9;max-height:70vh;border-radius:10px;background:#000;margin:0 auto;}'
+      + '.ck5-video[data-size="sm"]>.ck5-video__ph{width:360px;}'
+      + '.ck5-video[data-size="lg"]>.ck5-video__ph{width:960px;}'
       + '.ck5-video__foot{margin-top:.55em;text-align:center;line-height:1;}'
       + '.ck5-video__btn{display:inline-block;padding:6px 16px;border-radius:9999px;font-size:.8125rem;font-weight:600;text-decoration:none;background:#111827;color:#fff;transition:background .15s;}'
       + '.ck5-video__btn:hover{background:#000;}'
@@ -53,14 +57,23 @@
     var videoInner = mime
       ? '<source src="' + esc(srcAttr) + '" type="' + esc(mime) + '">'
       : '';
-    wrap.innerHTML =
-      '<video controls preload="metadata" playsinline' + (mime ? '' : ' src="' + esc(srcAttr) + '"') + '>'
+    var playerHtml = '<video controls preload="metadata" playsinline' + (mime ? '' : ' src="' + esc(srcAttr) + '"') + '>'
       + videoInner
-      + '</video>'
+      + '</video>';
+    // 1.7.0: 플레이어(메타데이터 요청)는 화면 가까이 왔을 때 만든다. 그 전에는 같은 크기의 자리만 둔다.
+    wrap.innerHTML =
+      '<div class="ck5-video__ph" aria-hidden="true"></div>'
       + '<div class="ck5-video__foot">'
       + '<a class="ck5-video__btn" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">'
       + esc(t('content.video.open', '동영상 원본 열기'))
       + '</a></div>';
+    whenVisible(wrap, function () {
+      var ph = wrap.querySelector('.ck5-video__ph');
+      if (!ph) return;
+      var holder = document.createElement('div');
+      holder.innerHTML = playerHtml;
+      ph.replaceWith(holder.firstElementChild);
+    });
 
     // 승격 대상: figure.ck5sp-video-embed > (전체 교체) / 그 외엔 링크만 감싼 블록
     var block = a.closest('figure.ck5sp-video-embed, figure.ck5sp-video, p, div');
