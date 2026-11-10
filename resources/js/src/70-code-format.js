@@ -71,22 +71,13 @@
     return next;
   }
 
-  /**
-   * 생성 전에 기다릴 것(글쓰기 도우미 설정 조회 등, `editorConfigWait`)이 있으면 기다린 뒤(상한 있음)
-   * 설정을 보강해 원래 create 를 부른다. 기다릴 것이 없으면 지금처럼 바로 부른다.
-   */
+  /** 등록된 설정 보강을 적용해 원래 create 를 부른다(코드 서식이 첫 항목, 1.7.0 글자 수가 그다음). */
   function wrapClassicEditor(C) {
     if (!C || C.__ck5spCodeWrapped || typeof C.create !== 'function') return;
     var original = C.create;
     try {
       C.create = function (el, cfg) {
-        var self = this;
-        var wait = null;
-        try { wait = editorConfigWait(el); } catch (e) { warnOnce('editor config wait', e); wait = null; }
-        if (!wait) return original.call(self, el, applyEditorConfigHooks(el, cfg));
-        return wait.then(function () {
-          return original.call(self, el, applyEditorConfigHooks(el, cfg));
-        });
+        return original.call(this, el, applyEditorConfigHooks(el, cfg));
       };
       C.__ck5spCodeWrapped = true;
     } catch (e) { codeFormatWarn(e); }

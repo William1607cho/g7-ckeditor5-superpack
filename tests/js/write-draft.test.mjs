@@ -67,6 +67,17 @@ test('byteLength: UTF-8 바이트', () => {
   assert.equal(d.byteLength('😀'), 4);
 });
 
+test('userKey: uuid 를 그대로 쓰지 않는 짧은 해시, 키 형식에 맞음, 없으면 빈 값', () => {
+  const k = d.userKey('8f6a1c2e-0000-4000-8000-123456789abc');
+  assert.match(k, /^u[0-9a-z]+$/);
+  assert.equal(k.includes('8f6a1c2e'), false);
+  assert.equal(d.userKey('8f6a1c2e-0000-4000-8000-123456789abc'), k);
+  assert.notEqual(d.userKey('other'), k);
+  assert.equal(d.userKey(''), '');
+  assert.equal(d.userKey(null), '');
+  assert.ok(d.draftKey(k, '/board/free/write', '').startsWith('g7sp:draft:v1:' + k + ':'));
+});
+
 test('fingerprint: 같은 내용은 같고 다르면 다르다', () => {
   assert.equal(d.fingerprint('<p>a</p>'), d.fingerprint('<p>a</p>'));
   assert.notEqual(d.fingerprint('<p>a</p>'), d.fingerprint('<p>b</p>'));

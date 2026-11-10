@@ -165,10 +165,10 @@
             "expose": true
         },
         "write_draft_enabled": {
-            "expose": false
+            "expose": true
         },
         "write_count_enabled": {
-            "expose": false
+            "expose": true
         }
     }
 }

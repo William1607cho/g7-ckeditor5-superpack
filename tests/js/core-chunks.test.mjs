@@ -36,6 +36,29 @@ test('isPostEditorEl: sirsoft 1.1 id 컨테이너·1.0 클래스는 본문 에�
   assert.equal(core.isPostEditorEl(null), false);
 });
 
+test('writeWanted: 로그인 사용자(_global.currentUser.uuid) + 글쓰기 화면 + 기능 켜짐일 때만', () => {
+  const user = { _global: { currentUser: { uuid: 'abc-123' } } };
+  const on = { write_draft_enabled: true };
+  const want = (opts) => { const { core } = loadGlobal(opts); return core.writeWanted(core.readSettings()); };
+  assert.equal(want({ path: '/board/free/write', settings: on, state: user }), true);
+  assert.equal(want({ path: '/board/free/12/edit', settings: { write_count_enabled: true }, state: user }), true);
+  assert.equal(want({ path: '/board/free/write', settings: on, state: { currentUser: { uuid: 'x' } } }), true); // _global 없는 모양
+  assert.equal(want({ path: '/board/free/write', settings: on, state: { _global: { currentUser: null } } }), false); // 비로그인
+  assert.equal(want({ path: '/board/free/write', settings: on }), false); // 상태 없음
+  assert.equal(want({ path: '/board/free/write', settings: {}, state: user }), false); // 모두 꺼짐
+  assert.equal(want({ path: '/board/free/12', settings: on, state: user }), false); // 글 상세
+  assert.equal(want({ path: '/admin/board/free/write', settings: on, state: user }), false); // 관리자
+});
+
+test('글쓰기 도우미 설정 읽기(기본 꺼짐)', () => {
+  let { core } = loadGlobal();
+  assert.equal(core.readSettings().writeDraft, false);
+  assert.equal(core.readSettings().writeCount, false);
+  ({ core } = loadGlobal({ settings: { write_draft_enabled: true, write_count_enabled: 'true' } }));
+  assert.equal(core.readSettings().writeDraft, true);
+  assert.equal(core.readSettings().writeCount, true);
+});
+
 test('whenVisible: IntersectionObserver 가 없으면 바로 부른다', () => {
   const { core } = loadGlobal();
   const el = { isConnected: true };

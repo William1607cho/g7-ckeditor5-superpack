@@ -32,7 +32,7 @@ function fakeEl(tag) {
 }
 
 /** 전역 번들을 가짜 문서에서 평가하고, 'view' 묶음 자리로 코어 객체를 받아 돌려준다. */
-export function loadGlobal({ path: pathname = '/', settings = {}, config = {} } = {}) {
+export function loadGlobal({ path: pathname = '/', settings = {}, config = {}, state = null } = {}) {
   const doc = {
     readyState: 'complete',
     head: fakeEl('head'),
@@ -61,6 +61,7 @@ export function loadGlobal({ path: pathname = '/', settings = {}, config = {} } 
     Date,
   };
   win.window = win;
+  if (state) win.G7Core = { state: { get: () => state } }; // 코어 전역 상태(로그인 사용자 등)
   const ctx = vm.createContext(win);
   vm.runInContext(fs.readFileSync(path.join(root, 'dist/js/plugin.iife.js'), 'utf8'), ctx);
   let core = null;
@@ -88,7 +89,8 @@ export function loadChunk(name, extraCore = {}) {
     findMainBody() { return null; },
     routeKind() { return ''; },
     editorConfig() {},
-    editorConfigWait() {},
+    writeWanted() { return false; },
+    currentUserUuid() { return ''; },
   }, extraCore);
   const win = {
     document: { createElement: fakeEl, getElementById() { return null; }, head: fakeEl('head'), body: fakeEl('body'), addEventListener() {} },

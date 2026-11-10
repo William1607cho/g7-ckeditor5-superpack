@@ -19,8 +19,8 @@
    * ================================================================ *
    *  게시글 본문 에디터(사용자 글쓰기·수정 화면) 아래에 "글자 N · 공백 제외 M" 한 줄.
    *  - 세는 시점은 빌드 내장 WordCount 플러그인의 `update` 이벤트(플러그인이 알아서 간격을 둔다).
-   *    WordCount 는 전역 스크립트가 에디터 생성 때 넣는다(07-chunks). 없으면(설정을 늦게 안 경우) 자체로
-   *    `change:data` 를 300ms 간격으로 센다.
+   *    WordCount 는 전역 스크립트가 에디터 생성 때 넣는다(07-chunks). 없으면(로그인 상태를 늦게 안 경우 등)
+   *    자체로 `change:data` 를 300ms 간격으로 센다.
    *  - 글자는 에디터 모델의 글자 노드를 모아 센다(문단 사이는 세지 않음). 이모지 등 합쳐진 글자는
    *    코드 포인트 단위다(순수 함수 `core.ns('count').countChars`).
    *  - 댓글 에디터는 본문 에디터 컨테이너(코어 `isPostEditorEl`) 밖이라 편집기 스캔 대상이 아니다.
@@ -78,8 +78,8 @@
     }
 
     function attach(container) {
-      var c = core.writeConfig && core.writeConfig();
-      if (!c || !c.count) return;
+      var cfg = core.readSettings();
+      if (!cfg.writeCount || !core.writeWanted(cfg)) return;
       var editor = core.editorInstanceNear(container);
       if (!editor || !editor.model) return;
       if (done) { if (done.has(editor)) return; done.add(editor); } else if (editor.__ck5spCount) return;
@@ -206,11 +206,21 @@
       return (h >>> 0).toString(36) + ':' + s.length;
     }
 
+    /** 저장 키의 사용자 구분(로그인 사용자 uuid 의 짧은 해시, uuid 를 그대로 남기지 않는다). 없으면 '' */
+    function userKey(uuid) {
+      var s = String(uuid || '');
+      if (!s) return '';
+      var h = 5381;
+      for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+      return 'u' + (h >>> 0).toString(36);
+    }
+
     var ns = core.ns('draft');
     ns.draftKey = draftKey;
     ns.pruneKeys = pruneKeys;
     ns.byteLength = byteLength;
     ns.fingerprint = fingerprint;
+    ns.userKey = userKey;
     ns.MAX_AGE_MS = MAX_AGE_MS;
     ns.MAX_BYTES = MAX_BYTES;
     ns.MAX_DRAFTS = MAX_DRAFTS;
@@ -398,9 +408,10 @@
     /* ---- 에디터에 붙이기 ---- */
 
     function attach(container) {
-      var c = core.writeConfig && core.writeConfig();
-      if (!c || !c.draft || !c.user) return;
-      if (core.routeKind() !== 'write') return;
+      var cfg = core.readSettings();
+      if (!cfg.writeDraft || !core.writeWanted(cfg)) return;
+      var c = { user: userKey(core.currentUserUuid()) };
+      if (!c.user) return;
       if (!core.isPostEditorEl(container)) return;
       var editor = core.editorInstanceNear(container);
       if (!editor || !editor.model) return;

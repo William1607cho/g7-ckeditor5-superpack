@@ -19,26 +19,13 @@
   var editorSections = []; // 편집기 섹션 spec — editorOrder 오름차순, editorOrder 없는 섹션은 뒤
   var namespaces = {};
   var editorConfigHooks = []; // 본문 에디터 생성 설정 보강 함수(등록 순)
-  var editorConfigWaits = []; // 생성 전에 기다릴 것을 돌려주는 함수(el) → Promise|null. 각자 시간 상한을 둔다
 
   var core = {
     id: IDENTIFIER,
     section: registerSection,
     ns: function (name) { return namespaces[name] || (namespaces[name] = {}); },
-    editorConfig: function (fn) { if (typeof fn === 'function') editorConfigHooks.push(fn); },
-    editorConfigWait: function (fn) { if (typeof fn === 'function') editorConfigWaits.push(fn); }
+    editorConfig: function (fn) { if (typeof fn === 'function') editorConfigHooks.push(fn); }
   };
-
-  /** 에디터 생성 전에 기다릴 Promise(모두 끝나거나 실패하면 풀림) 또는 null */
-  function editorConfigWait(el) {
-    var ps = [];
-    for (var i = 0; i < editorConfigWaits.length; i++) {
-      var p = null;
-      try { p = editorConfigWaits[i](el); } catch (e) { warnOnce('editor config wait ' + i, e); }
-      if (p && typeof p.then === 'function') ps.push(p.then(null, function () {}));
-    }
-    return ps.length ? Promise.all(ps) : null;
-  }
 
   function isVisitorSection(spec) {
     return spec.scope === 'visitor' || spec.scope === 'both';

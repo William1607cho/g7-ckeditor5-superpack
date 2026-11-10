@@ -83,11 +83,21 @@
       return (h >>> 0).toString(36) + ':' + s.length;
     }
 
+    /** 저장 키의 사용자 구분(로그인 사용자 uuid 의 짧은 해시, uuid 를 그대로 남기지 않는다). 없으면 '' */
+    function userKey(uuid) {
+      var s = String(uuid || '');
+      if (!s) return '';
+      var h = 5381;
+      for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+      return 'u' + (h >>> 0).toString(36);
+    }
+
     var ns = core.ns('draft');
     ns.draftKey = draftKey;
     ns.pruneKeys = pruneKeys;
     ns.byteLength = byteLength;
     ns.fingerprint = fingerprint;
+    ns.userKey = userKey;
     ns.MAX_AGE_MS = MAX_AGE_MS;
     ns.MAX_BYTES = MAX_BYTES;
     ns.MAX_DRAFTS = MAX_DRAFTS;
@@ -275,9 +285,10 @@
     /* ---- 에디터에 붙이기 ---- */
 
     function attach(container) {
-      var c = core.writeConfig && core.writeConfig();
-      if (!c || !c.draft || !c.user) return;
-      if (core.routeKind() !== 'write') return;
+      var cfg = core.readSettings();
+      if (!cfg.writeDraft || !core.writeWanted(cfg)) return;
+      var c = { user: userKey(core.currentUserUuid()) };
+      if (!c.user) return;
       if (!core.isPostEditorEl(container)) return;
       var editor = core.editorInstanceNear(container);
       if (!editor || !editor.model) return;

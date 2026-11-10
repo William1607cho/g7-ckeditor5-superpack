@@ -53,7 +53,10 @@
       viewToc: asBool(s.view_toc_enabled, false),
       viewLightbox: asBool(s.view_lightbox_enabled, false),
       viewFold: asBool(s.view_fold_enabled, false),
-      viewReadTime: asBool(s.view_readtime_enabled, false)
+      viewReadTime: asBool(s.view_readtime_enabled, false),
+      // 글쓰기 도우미(1.7.0, 기본 꺼짐) — 켜짐 여부만 노출
+      writeDraft: asBool(s.write_draft_enabled, false),
+      writeCount: asBool(s.write_count_enabled, false)
     };
   }
 
