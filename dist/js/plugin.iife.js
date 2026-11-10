@@ -197,6 +197,16 @@
    *  화면 판별 (1.7.0) — 글 보기(B)·글쓰기 도우미(C) 범위
    * ---------------------------------------------------------------- */
 
+  /**
+   * 게시글 본문 에디터 컨테이너. sirsoft-ckeditor5 1.1 부터 컨테이너에 `ckeditor5-wrapper` 클래스가 없고
+   * `id="ckeditor5-<이름>"` 만 있다(1.0 은 클래스). 둘 다 받는다. 댓글 에디터(g7-comment-editor)는 제외.
+   */
+  var POST_EDITOR_SEL = '.ckeditor5-wrapper, div[id^="ckeditor5-"]';
+
+  function isPostEditorEl(el) {
+    return !!(el && el.closest && el.closest(POST_EDITOR_SEL) && !el.closest('.g7ce-wrapper'));
+  }
+
   /** 템플릿 작성자용 본문 표식. 이 속성(또는 같은 이름의 클래스)이 본문 `.ck-content` 자신이나 조상에 있으면 그 본문만 쓴다. */
   var POST_BODY_ATTR = 'data-g7-post-body';
   var POST_BODY_CLASS = 'g7-post-body';
@@ -507,6 +517,7 @@
   core.routeKind = routeKind;
   core.authToken = authToken;
   core.chunkUrl = chunkUrl;
+  core.isPostEditorEl = isPostEditorEl;
 
   /** 글 보기 기능 중 하나라도 켜져 있으면 true */
   function viewWanted(cfg) {
@@ -594,7 +605,7 @@
 
   /** 본문 에디터 요소(댓글 에디터 제외)이고 사용자 글쓰기·수정 화면이면 true */
   function isUserWritePostEditor(el) {
-    return routeKind() === 'write' && !!(el && el.closest && el.closest('.ckeditor5-wrapper'));
+    return routeKind() === 'write' && isPostEditorEl(el);
   }
 
   // 에디터 생성 전: 설정을 아직 모르면 조회를 잠깐 기다린다(상한 WRITE_CFG_WAIT_MS)
@@ -634,7 +645,11 @@
       }
       return c.draft || c.count;
     },
-    where: function () { return !!document.querySelector('.ckeditor5-wrapper .ck-editor__editable'); }
+    where: function () {
+      var eds = document.querySelectorAll('.ck-editor__editable');
+      for (var i = 0; i < eds.length; i++) if (isPostEditorEl(eds[i])) return true;
+      return false;
+    }
   });
 
   /* ================================================================ *

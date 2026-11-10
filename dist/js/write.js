@@ -401,7 +401,7 @@
       var c = core.writeConfig && core.writeConfig();
       if (!c || !c.draft || !c.user) return;
       if (core.routeKind() !== 'write') return;
-      if (!container.closest('.ckeditor5-wrapper') && !container.matches('.ckeditor5-wrapper')) return;
+      if (!core.isPostEditorEl(container)) return;
       var editor = core.editorInstanceNear(container);
       if (!editor || !editor.model) return;
       if (attached) { if (attached.has(editor)) return; attached.add(editor); } else if (editor.__ck5spDraft) return;

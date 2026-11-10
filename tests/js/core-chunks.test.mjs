@@ -26,6 +26,16 @@ test('chunkUrl: 확장자 모드와 확장자 없는 모드, cache_version', () 
   assert.equal(core.chunkUrl('write'), '/api/plugins/assets/g7-ckeditor5-superpack?file=dist%2Fjs%2Fwrite.js&v=42');
 });
 
+test('isPostEditorEl: sirsoft 1.1 id 컨테이너·1.0 클래스는 본문 에디터, 댓글 에디터 안은 아님', () => {
+  const { core } = loadGlobal();
+  const mk = (matches) => ({ closest: (sel) => (matches.some((m) => sel.split(',').map((s) => s.trim()).includes(m)) ? {} : null) });
+  assert.equal(core.isPostEditorEl(mk(['div[id^="ckeditor5-"]'])), true);
+  assert.equal(core.isPostEditorEl(mk(['.ckeditor5-wrapper'])), true);
+  assert.equal(core.isPostEditorEl(mk(['div[id^="ckeditor5-"]', '.g7ce-wrapper'])), false);
+  assert.equal(core.isPostEditorEl(mk([])), false);
+  assert.equal(core.isPostEditorEl(null), false);
+});
+
 test('whenVisible: IntersectionObserver 가 없으면 바로 부른다', () => {
   const { core } = loadGlobal();
   const el = { isConnected: true };

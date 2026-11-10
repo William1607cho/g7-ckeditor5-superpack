@@ -21,6 +21,16 @@
    *  화면 판별 (1.7.0) — 글 보기(B)·글쓰기 도우미(C) 범위
    * ---------------------------------------------------------------- */
 
+  /**
+   * 게시글 본문 에디터 컨테이너. sirsoft-ckeditor5 1.1 부터 컨테이너에 `ckeditor5-wrapper` 클래스가 없고
+   * `id="ckeditor5-<이름>"` 만 있다(1.0 은 클래스). 둘 다 받는다. 댓글 에디터(g7-comment-editor)는 제외.
+   */
+  var POST_EDITOR_SEL = '.ckeditor5-wrapper, div[id^="ckeditor5-"]';
+
+  function isPostEditorEl(el) {
+    return !!(el && el.closest && el.closest(POST_EDITOR_SEL) && !el.closest('.g7ce-wrapper'));
+  }
+
   /** 템플릿 작성자용 본문 표식. 이 속성(또는 같은 이름의 클래스)이 본문 `.ck-content` 자신이나 조상에 있으면 그 본문만 쓴다. */
   var POST_BODY_ATTR = 'data-g7-post-body';
   var POST_BODY_CLASS = 'g7-post-body';
