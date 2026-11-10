@@ -5,10 +5,13 @@ namespace Plugins\G7\Ckeditor5\Superpack\Services;
 use App\Support\OutboundUrlValidator;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Plugins\G7\Ckeditor5\Superpack\Contracts\LinkPreviewFetcher;
 use Plugins\G7\Ckeditor5\Superpack\Models\LinkPreview;
+use Plugins\G7\Ckeditor5\Superpack\Support\BotChallengeDetector;
+use Plugins\G7\Ckeditor5\Superpack\Support\LinkPreviewCharset;
 use Plugins\G7\Ckeditor5\Superpack\Support\LinkPreviewFetchResult;
 use Plugins\G7\Ckeditor5\Superpack\Support\OutboundIpGuard;
 
@@ -30,6 +33,12 @@ use Plugins\G7\Ckeditor5\Superpack\Support\OutboundIpGuard;
  *    압축 거부·프록시 무시. 모든 홉을 합친 마감 8초.
  *  - 실제 외부 요청에만 빈도 제한: 서버 전체 분당 120회, 대상 호스트당 분당 20회.
  *    초과하면 failed 를 돌려주고 캐시에 기록하지 않는다.
+ *
+ * 1.7.0 보완:
+ *  - 주소 판정(코어·{@see OutboundIpGuard})에서 거절된 주소는 DB 실패 행을 만들지 않고
+ *    {@see self::BLOCKED_CACHE_SECONDS} 동안 임시 캐시(Laravel 캐시)에만 기억한다.
+ *  - 봇 차단 챌린지 페이지({@see BotChallengeDetector})는 카드로 만들지 않고 어디에도 저장하지 않는다.
+ *  - `<head>` 를 응답·문서의 문자셋({@see LinkPreviewCharset})에 맞춰 UTF-8 로 바꾼 뒤 파싱한다.
  *
  * 캐시 TTL 은 관리자 설정으로 조정한다 (성공=일 단위 `linkcard_ttl_ok_days`,
  * 실패=시간 단위 `linkcard_ttl_fail_hours`). 성공(ok)·최소(minimal) 은 성공 TTL,
@@ -80,6 +89,12 @@ class LinkPreviewService
     /** 성공 계열 상태 */
     private const OK_STATUSES = ['ok', 'minimal'];
 
+    /** 주소 판정에서 거절된 주소를 기억하는 시간 (초) — DB 행 대신 (1.7.0) */
+    public const BLOCKED_CACHE_SECONDS = 600;
+
+    /** 거절 임시 캐시 키 접두사 (뒤에 url_hash) */
+    public const BLOCKED_CACHE_PREFIX = 'g7-ckeditor5-superpack:link-preview:blocked:';
+
     private readonly LinkPreviewFetcher $fetcher;
 
     public function __construct(?LinkPreviewFetcher $fetcher = null)
@@ -107,11 +122,23 @@ class LinkPreviewService
             return $this->present($row);
         }
 
+        $blockedKey = self::BLOCKED_CACHE_PREFIX.$hash;
+        if ($this->cacheHas($blockedKey)) {
+            return $this->presentFailed($url);
+        }
+
         $result = $this->fetch($url);
 
-        if (! empty($result['rate_limited'])) {
-            // 빈도 제한으로 요청하지 못했다 — 실패를 캐시하면 제한이 풀린 뒤에도
-            // 실패 TTL 동안 카드가 안 나오므로 기록하지 않는다.
+        if (! empty($result['rate_limited']) || ! empty($result['challenge'])) {
+            // 빈도 제한으로 요청하지 못했거나 봇 차단 챌린지 페이지를 받았다 — 실패를 캐시하면
+            // 제한이 풀린 뒤에도 TTL 동안 카드가 안 나오므로 기록하지 않는다.
+            return $this->presentFailed($url);
+        }
+
+        if (! empty($result['blocked'])) {
+            // 주소 판정에서 거절 — DB 행을 만들지 않고 짧게만 기억한다(같은 주소의 반복 해석 방지).
+            $this->cachePut($blockedKey);
+
             return $this->presentFailed($url);
         }
 
@@ -286,7 +313,7 @@ class LinkPreviewService
     private function fetch(string $url): array
     {
         if (! $this->isFetchableUrl($url)) {
-            return ['status' => 'failed'];
+            return ['status' => 'failed', 'blocked' => true];
         }
 
         $deadline = microtime(true) + self::TOTAL_DEADLINE_SECONDS;
@@ -295,7 +322,7 @@ class LinkPreviewService
         for ($hop = 0; $hop < self::MAX_HOPS; $hop++) {
             $target = $this->resolveTarget($current);
             if ($target === null) {
-                return ['status' => 'failed'];
+                return ['status' => 'failed', 'blocked' => true];
             }
 
             $remaining = $deadline - microtime(true);
@@ -335,7 +362,7 @@ class LinkPreviewService
 
                 $next = $this->absolutize($location, $target['url']);
                 if (! $this->isFetchableUrl($next)) {
-                    return ['status' => 'failed'];
+                    return ['status' => 'failed', 'blocked' => true];
                 }
                 $current = $next;
 
@@ -347,13 +374,20 @@ class LinkPreviewService
                 return ['status' => $response->isSuccessful() ? 'empty' : 'failed'];
             }
 
-            if (! $response->isSuccessful()) {
-                // 2xx 아님 — 주로 Cloudflare "Just a moment…" 챌린지(403). 응답 자체는
-                // 받았으므로, 본문에 <title> 이라도 있으면 최소 카드로 살린다.
-                return $this->parseErrorResponse($response->body, $target['url']);
+            if (BotChallengeDetector::isChallenge($response->status, $response->headers, $response->body)) {
+                // 봇 차단 챌린지 — 진짜 제목이 아니므로 카드로 만들지 않고 저장하지도 않는다(1.7.0).
+                return ['status' => 'failed', 'challenge' => true];
             }
 
-            return $this->parseMeta($response->body, $target['url']);
+            $contentType = $response->header('Content-Type');
+
+            if (! $response->isSuccessful()) {
+                // 2xx 아님(챌린지 아님) — 응답 자체는 받았으므로, 본문에 <title> 이라도
+                // 있으면 최소 카드로 살린다.
+                return $this->parseErrorResponse($response->body, $target['url'], $contentType);
+            }
+
+            return $this->parseMeta($response->body, $target['url'], $contentType);
         }
 
         return ['status' => 'failed'];
@@ -524,9 +558,9 @@ class LinkPreviewService
      *
      * @return array{status:string, title:?string, description:?string, image:?string, site_name:?string, favicon:?string}
      */
-    private function parseMeta(string $body, string $baseUrl): array
+    private function parseMeta(string $body, string $baseUrl, ?string $contentType = null): array
     {
-        $head = $this->headSection(substr($body, 0, self::MAX_PARSE_BYTES));
+        $head = $this->utf8Head($body, $contentType);
 
         $og = function (string $prop) use ($head): ?string {
             // property 와 content 순서가 바뀔 수 있어 두 패턴 모두 시도
@@ -631,9 +665,9 @@ class LinkPreviewService
      *
      * @return array{status:string, title?:?string, favicon?:?string}
      */
-    private function parseErrorResponse(string $body, string $currentUrl): array
+    private function parseErrorResponse(string $body, string $currentUrl, ?string $contentType = null): array
     {
-        $head = $this->headSection(substr($body, 0, self::MAX_PARSE_BYTES));
+        $head = $this->utf8Head($body, $contentType);
 
         if (! preg_match('/<title[^>]*>(.*?)<\/title>/is', $head, $m)) {
             return ['status' => 'failed'];
@@ -649,6 +683,37 @@ class LinkPreviewService
             'title' => $title,
             'favicon' => $this->parseFavicon($head, $currentUrl),
         ];
+    }
+
+    /**
+     * 파싱할 `<head>` 구간을 잘라 문서 문자셋에서 UTF-8 로 바꾼다 (1.7.0).
+     * 문자셋 판정은 원래 바이트로 하고, 변환은 잘라 낸 구간에만 한다.
+     */
+    private function utf8Head(string $body, ?string $contentType): string
+    {
+        $raw = substr($body, 0, self::MAX_PARSE_BYTES);
+        $head = $this->headSection($raw);
+
+        return LinkPreviewCharset::toUtf8($head, LinkPreviewCharset::detect($contentType, $raw));
+    }
+
+    /** 거절 임시 캐시 조회 — 캐시 저장소가 없거나 오류면 false */
+    private function cacheHas(string $key): bool
+    {
+        try {
+            return Cache::has($key);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /** 거절 임시 캐시 기록 — 실패해도 응답에는 영향 없음 */
+    private function cachePut(string $key): void
+    {
+        try {
+            Cache::put($key, 1, self::BLOCKED_CACHE_SECONDS);
+        } catch (\Throwable) {
+        }
     }
 
     /** `<head>` 구간만 잘라 파싱 비용을 줄인다 (없으면 앞부분 사용) */

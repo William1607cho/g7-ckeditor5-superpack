@@ -268,6 +268,54 @@ class LinkPreviewServiceTest extends PluginTestCase
         $this->assertCount(1, $fake->calls);
     }
 
+    // ── 1.7.0: 거절 주소·챌린지·문자셋 ───────────────────────
+
+    #[DataProvider('internalUrls')]
+    public function test_rejected_address_leaves_no_row_and_is_remembered_briefly(string $url): void
+    {
+        $fake = $this->fakeFetcher();
+        $service = $this->service($fake);
+
+        $this->assertSame('failed', $service->get($url)['status']);
+        $this->assertNull($this->row(trim($url)));
+
+        $key = LinkPreviewService::BLOCKED_CACHE_PREFIX.hash('sha256', trim($url));
+        $this->assertTrue(\Illuminate\Support\Facades\Cache::has($key));
+        \Illuminate\Support\Facades\Cache::forget($key);
+    }
+
+    public function test_redirect_to_multicast_is_rejected_without_row(): void
+    {
+        $fake = $this->fakeFetcher()->push(Fake::redirect('http://239.255.255.250/'));
+
+        $this->assertSame('failed', $this->service($fake)->get(self::URL)['status']);
+        $this->assertNull($this->row(self::URL));
+        \Illuminate\Support\Facades\Cache::forget(LinkPreviewService::BLOCKED_CACHE_PREFIX.hash('sha256', self::URL));
+    }
+
+    public function test_challenge_page_is_not_carded_or_stored(): void
+    {
+        $fake = $this->fakeFetcher()->push(Fake::html('<html><head><title>Just a moment...</title></head></html>', 403));
+
+        $data = $this->service($fake)->get(self::URL);
+
+        $this->assertSame('failed', $data['status']);
+        $this->assertNull($data['title']);
+        $this->assertNull($this->row(self::URL));
+    }
+
+    public function test_euc_kr_page_title_is_converted(): void
+    {
+        $html = mb_convert_encoding('<html><head><title>한국어 제목</title><meta property="og:description" content="요약문"></head></html>', 'UHC', 'UTF-8');
+        $fake = $this->fakeFetcher()->push(Fake::html($html, 200, 'text/html; charset=EUC-KR'));
+
+        $data = $this->service($fake)->get(self::URL);
+
+        $this->assertSame('ok', $data['status']);
+        $this->assertSame('한국어 제목', $data['title']);
+        $this->assertSame('요약문', $data['description']);
+    }
+
     public function test_ip_literal_host_is_passed_as_is(): void
     {
         $fake = $this->fakeFetcher()->push(Fake::html(Fake::ogPage()));
