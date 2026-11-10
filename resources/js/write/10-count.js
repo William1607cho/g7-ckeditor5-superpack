@@ -68,14 +68,17 @@
       if (!editor || !editor.model) return;
       if (done) { if (done.has(editor)) return; done.add(editor); } else if (editor.__ck5spCount) return;
       editor.__ck5spCount = true;
-      var shell = container.querySelector('.ck-editor') || container;
-      if (shell.parentNode && shell.parentNode.querySelector(':scope > [data-ck5sp-write="count"]')) return;
+      // 업로드 바(42-video-library)처럼 에디터 컨테이너의 형제로 둔다(컨테이너 안은 sirsoft·CKEditor 소관)
+      var parent = container.parentNode;
+      if (!parent) return;
+      var nextEl = container.nextElementSibling;
+      if (nextEl && nextEl.getAttribute('data-ck5sp-write') === 'count') return;
       injectStyle();
       var line = document.createElement('div');
       line.className = 'ck5sp-count';
       line.setAttribute('data-ck5sp-write', 'count');
       line.setAttribute('aria-live', 'polite');
-      shell.parentNode.insertBefore(line, shell.nextSibling);
+      parent.insertBefore(line, container.nextSibling);
       var update = function () {
         try { line.textContent = label(countChars(modelText(editor))); } catch (e) { core.warnOnce('count', e); }
       };
