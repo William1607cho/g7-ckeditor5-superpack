@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Plugins\G7\Ckeditor5\Superpack\Http\Controllers\LinkPreviewController;
 use Plugins\G7\Ckeditor5\Superpack\Http\Controllers\VideoServeController;
 use Plugins\G7\Ckeditor5\Superpack\Http\Controllers\VideoUploadController;
+use Plugins\G7\Ckeditor5\Superpack\Http\Controllers\WriteAssistController;
 use Plugins\G7\Ckeditor5\Superpack\Support\SuperpackRateLimiters;
 
 /*
@@ -42,6 +43,13 @@ Route::post('video/upload/complete', [VideoUploadController::class, 'complete'])
 Route::post('video/meta', [VideoUploadController::class, 'meta'])
     ->middleware('throttle:'.SuperpackRateLimiters::VIDEO_META)
     ->name('api.g7-ckeditor5-superpack.video.meta');
+
+// 글쓰기 도우미 설정 (1.7.0, 로그인 사용자 — AuthBaseController 가 auth:sanctum 적용).
+// 제한기 이름은 문자열로 적는다: plugin:update 1회차 프로세스에 옛 SuperpackRateLimiters 가 남아 있으면
+// 새 상수를 읽지 못한다. 값은 SuperpackRateLimiters::WRITE_CONFIG 와 같아야 한다(단위 테스트로 대조).
+Route::get('write-config', [WriteAssistController::class, 'show'])
+    ->middleware('throttle:g7-ckeditor5-superpack.write-config')
+    ->name('api.g7-ckeditor5-superpack.write-config');
 
 // 동영상 스트리밍 (공개 — 추측 불가 public_id, Range 자동 지원).
 Route::get('video/{id}', [VideoServeController::class, 'show'])

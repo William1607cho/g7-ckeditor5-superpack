@@ -520,6 +520,123 @@
     where: function () { return !!findMainBody(); }
   });
 
+  /* ---------------------------------------------------------------- *
+   *  글쓰기 도우미 설정 (1.7.0)
+   * ---------------------------------------------------------------- *
+   *  임시 저장·글자 수 켜짐 여부는 방문자 설정(SPA 셸)에 없다. 사용자 글쓰기·수정 화면에서 로그인 토큰이
+   *  있을 때만 `GET /api/plugins/<id>/write-config` 로 묻는다(로그인 사용자 전용).
+   *  - 결과는 이 탭(sessionStorage)에 10분 보관한다. 토큰이 바뀌면(다른 계정) 버린다.
+   *    보관 값: 켜짐 여부 2개, 사용자 구분 해시, 시각, 토큰 지문(되돌릴 수 없는 32비트 해시).
+   *  - 실패·비로그인이면 꺼짐으로 보고 같은 화면에서 다시 묻지 않는다(1분).
+   *  - 글자 수(WordCount)는 에디터를 만들 때만 넣을 수 있어, 글쓰기 화면의 본문 에디터 생성은 이 조회를
+   *    최대 WRITE_CFG_WAIT_MS 까지 기다린다(core.editorConfigWait). 보관 값이 있으면 기다리지 않는다.
+   */
+  var WRITE_CFG_KEY = 'g7sp:write-config:v1';
+  var WRITE_CFG_MAX_AGE = 10 * 60 * 1000;
+  var WRITE_CFG_RETRY_MS = 60 * 1000;
+  var WRITE_CFG_WAIT_MS = 1500;
+  var writeCfg = null; // { draft, count, user, t, tk }
+  var writeCfgPromise = null;
+  var writeCfgFailedAt = 0;
+
+  /** 토큰 지문(djb2 32비트) — 계정이 바뀌었는지 보는 데만 쓴다 */
+  function tokenPrint(token) {
+    var h = 5381;
+    for (var i = 0; i < token.length; i++) h = ((h << 5) + h + token.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  function writeCfgFresh(c, tk) {
+    return !!c && c.tk === tk && (Date.now() - (c.t || 0)) < WRITE_CFG_MAX_AGE;
+  }
+
+  /** 지금 알고 있는 글쓰기 도우미 설정(없으면 null). 보관 값도 본다. */
+  function knownWriteConfig() {
+    var token = authToken();
+    if (!token) return null;
+    var tk = tokenPrint(token);
+    if (writeCfgFresh(writeCfg, tk)) return writeCfg;
+    try {
+      var raw = window.sessionStorage && window.sessionStorage.getItem(WRITE_CFG_KEY);
+      var c = raw ? JSON.parse(raw) : null;
+      if (writeCfgFresh(c, tk)) { writeCfg = c; return c; }
+    } catch (e) {}
+    return null;
+  }
+
+  /** 글쓰기 도우미 설정을 묻는다(이미 알면 그 값). 비로그인·실패면 null. */
+  function loadWriteConfig() {
+    var known = knownWriteConfig();
+    if (known) return Promise.resolve(known);
+    var token = authToken();
+    if (!token || typeof fetch !== 'function') return Promise.resolve(null);
+    if (writeCfgPromise) return writeCfgPromise;
+    if (writeCfgFailedAt && Date.now() - writeCfgFailedAt < WRITE_CFG_RETRY_MS) return Promise.resolve(null);
+    var tk = tokenPrint(token);
+    writeCfgPromise = fetch('/api/plugins/' + IDENTIFIER + '/write-config', {
+      headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+      credentials: 'same-origin'
+    }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (j) {
+      writeCfgPromise = null;
+      if (!j || typeof j !== 'object') { writeCfgFailedAt = Date.now(); return null; }
+      writeCfg = { draft: j.draft === true, count: j.count === true, user: String(j.user || ''), t: Date.now(), tk: tk };
+      try { window.sessionStorage && window.sessionStorage.setItem(WRITE_CFG_KEY, JSON.stringify(writeCfg)); } catch (e) {}
+      return writeCfg;
+    }, function () {
+      writeCfgPromise = null;
+      writeCfgFailedAt = Date.now();
+      return null;
+    });
+    return writeCfgPromise;
+  }
+
+  /** 본문 에디터 요소(댓글 에디터 제외)이고 사용자 글쓰기·수정 화면이면 true */
+  function isUserWritePostEditor(el) {
+    return routeKind() === 'write' && !!(el && el.closest && el.closest('.ckeditor5-wrapper'));
+  }
+
+  // 에디터 생성 전: 설정을 아직 모르면 조회를 잠깐 기다린다(상한 WRITE_CFG_WAIT_MS)
+  core.editorConfigWait(function (el) {
+    if (!isUserWritePostEditor(el) || !authToken() || knownWriteConfig()) return null;
+    return new Promise(function (resolve) {
+      var done = false;
+      var finish = function () { if (!done) { done = true; resolve(); } };
+      window.setTimeout(finish, WRITE_CFG_WAIT_MS);
+      loadWriteConfig().then(finish, finish);
+    });
+  });
+
+  // 에디터 생성 때: 글자 수가 켜져 있으면 빌드 내장 WordCount 를 본문 에디터에만 더한다(화면 표시는 write 묶음)
+  core.editorConfig(function (el, cfg) {
+    if (!isUserWritePostEditor(el)) return cfg;
+    var wc = knownWriteConfig();
+    var CK = window.CKEDITOR;
+    if (!wc || !wc.count || !CK || !CK.WordCount || !cfg) return cfg;
+    var plugins = Array.isArray(cfg.plugins) ? cfg.plugins : [];
+    var extra = Array.isArray(cfg.extraPlugins) ? cfg.extraPlugins : [];
+    if (plugins.indexOf(CK.WordCount) !== -1 || extra.indexOf(CK.WordCount) !== -1) return cfg;
+    return Object.assign({}, cfg, { extraPlugins: extra.concat([CK.WordCount]) });
+  });
+
+  core.writeConfig = knownWriteConfig;
+
+  declareChunk({
+    name: 'write',
+    phase: 'editor',
+    want: function () {
+      if (routeKind() !== 'write' || !authToken()) return false;
+      var c = knownWriteConfig();
+      if (!c) {
+        loadWriteConfig().then(function (r) { if (r && (r.draft || r.count)) requestEditorScan(); });
+        return false;
+      }
+      return c.draft || c.count;
+    },
+    where: function () { return !!document.querySelector('.ckeditor5-wrapper .ck-editor__editable'); }
+  });
+
   /* ================================================================ *
    *  통합 스캔
    * ================================================================ */

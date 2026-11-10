@@ -36,6 +36,16 @@
         "data_source": {
             "settings": "CKEditor 5 슈퍼팩 설정"
         },
+        "count": {
+            "label": "글자 {all} · 공백 제외 {nospace}"
+        },
+        "draft": {
+            "found": "임시 저장된 글이 있습니다({time}).",
+            "found_changed": "임시 저장된 글이 있습니다({time}). 그 뒤에 이 글이 다른 곳에서 수정되었을 수 있습니다.",
+            "restore": "복구",
+            "discard": "버리기",
+            "restored": "임시 저장본을 불러왔습니다."
+        },
         "video": {
             "button": "동영상 업로드",
             "hint": "{exts} · 최대 {max}MB",

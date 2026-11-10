@@ -38,6 +38,9 @@ class SuperpackRateLimiters
     /** 동영상 스트리밍 (공개, Range 요청) */
     public const VIDEO_SERVE = 'g7-ckeditor5-superpack.video-serve';
 
+    /** 글쓰기 도우미 설정 조회 (1.7.0, 로그인 사용자) — 라우트 파일은 이 값을 문자열로 적는다 */
+    public const WRITE_CONFIG = 'g7-ckeditor5-superpack.write-config';
+
     /** 분당 허용 횟수 */
     public const LIMITS = [
         self::LINK_PREVIEW => 60,
@@ -45,6 +48,7 @@ class SuperpackRateLimiters
         self::VIDEO_CHUNK => 1200,
         self::VIDEO_META => 120,
         self::VIDEO_SERVE => 600,
+        self::WRITE_CONFIG => 60,
     ];
 
     /**

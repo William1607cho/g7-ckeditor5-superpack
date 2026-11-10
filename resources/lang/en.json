@@ -36,6 +36,16 @@
         "data_source": {
             "settings": "CKEditor 5 Superpack settings"
         },
+        "count": {
+            "label": "{all} characters · {nospace} without spaces"
+        },
+        "draft": {
+            "found": "A saved draft exists ({time}).",
+            "found_changed": "A saved draft exists ({time}). This post may have been edited elsewhere since then.",
+            "restore": "Restore",
+            "discard": "Discard",
+            "restored": "The saved draft was restored."
+        },
         "video": {
             "button": "Upload video",
             "hint": "{exts} · up to {max}MB",
