@@ -96,8 +96,8 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 cd /path/to/gnuboard7/plugins
 
 # a release tag (recommended)
-curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.6.1.tar.gz | tar xz
-mv g7-ckeditor5-superpack-1.6.1 g7-ckeditor5-superpack
+curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.7.0.tar.gz | tar xz
+mv g7-ckeditor5-superpack-1.7.0 g7-ckeditor5-superpack
 
 # ...or the latest main
 git clone https://github.com/William1607cho/g7-ckeditor5-superpack.git
