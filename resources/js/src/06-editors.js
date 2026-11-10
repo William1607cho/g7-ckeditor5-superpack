@@ -5,6 +5,7 @@
     // 꺼지면 이 순회 자체를 건너뛰었는데, 그러면 videoEnabled 와 무관한 다른
     // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
     // 확인하는 현재 구조가 버그 없이 이미 검증됨, 원복하지 않고 유지)
+    try { ensureChunks(readSettings(), 'editor'); } catch (e) { warnOnce('chunks (editor)', e); }
     var containers = document.querySelectorAll('.ckeditor5-wrapper, [id^="ckeditor5-"]');
     for (var i = 0; i < containers.length; i++) {
       // 에디터가 실제로 붙었는지 확인 (editable 존재)

@@ -48,7 +48,12 @@
       editorFontSize: asInt(s.editor_font_size, 16, 12, 28),
       editorLineHeight: asLineHeight(s.editor_line_height, '1.6'),
       editorApplyToComments: asBool(s.editor_apply_to_comments, false),
-      imagePasteEnabled: asBool(s.imagepaste_enabled, true)
+      imagePasteEnabled: asBool(s.imagepaste_enabled, true),
+      // 글 보기(1.7.0, 기본 꺼짐) — 켜짐 여부만 방문자에게 노출된다
+      viewToc: asBool(s.view_toc_enabled, false),
+      viewLightbox: asBool(s.view_lightbox_enabled, false),
+      viewFold: asBool(s.view_fold_enabled, false),
+      viewReadTime: asBool(s.view_readtime_enabled, false)
     };
   }
 

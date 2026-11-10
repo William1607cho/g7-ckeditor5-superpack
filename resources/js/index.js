@@ -93,7 +93,12 @@
       editorFontSize: asInt(s.editor_font_size, 16, 12, 28),
       editorLineHeight: asLineHeight(s.editor_line_height, '1.6'),
       editorApplyToComments: asBool(s.editor_apply_to_comments, false),
-      imagePasteEnabled: asBool(s.imagepaste_enabled, true)
+      imagePasteEnabled: asBool(s.imagepaste_enabled, true),
+      // 글 보기(1.7.0, 기본 꺼짐) — 켜짐 여부만 방문자에게 노출된다
+      viewToc: asBool(s.view_toc_enabled, false),
+      viewLightbox: asBool(s.view_lightbox_enabled, false),
+      viewFold: asBool(s.view_fold_enabled, false),
+      viewReadTime: asBool(s.view_readtime_enabled, false)
     };
   }
 
@@ -188,6 +193,71 @@
     return null;
   }
 
+  /* ---------------------------------------------------------------- *
+   *  화면 판별 (1.7.0) — 글 보기(B)·글쓰기 도우미(C) 범위
+   * ---------------------------------------------------------------- */
+
+  /** 템플릿 작성자용 본문 표식. 이 속성(또는 같은 이름의 클래스)이 본문 `.ck-content` 자신이나 조상에 있으면 그 본문만 쓴다. */
+  var POST_BODY_ATTR = 'data-g7-post-body';
+  var POST_BODY_CLASS = 'g7-post-body';
+
+  /** 경로 종류: 'detail'(글 상세) · 'write'(사용자 글쓰기·수정) · ''(그 밖). wc-community routes.json 기준. */
+  function routeKind(pathname) {
+    var p = String(pathname == null ? (window.location && window.location.pathname) || '' : pathname).replace(/\/+$/, '');
+    var m = p.match(/^\/board\/[^/]+\/([^/]+)(?:\/([^/]+))?$/);
+    if (!m) return '';
+    if (!m[2]) return m[1] === 'write' ? 'write' : 'detail';
+    return m[2] === 'edit' ? 'write' : '';
+  }
+
+  /** 본문 후보에서 빼는 자리: 모달·대화상자, 댓글 영역, 댓글 승격 본문 */
+  var NOT_POST_BODY = '[role="dialog"], [aria-modal="true"], [data-g7-anchor^="comment"], p[data-g7ce], .g7ce-wrapper';
+
+  /**
+   * 글 상세 화면의 글 본문 `.ck-content` 하나를 찾는다. 없으면 null.
+   *  1. 표식(`data-g7-post-body` 속성 또는 `g7-post-body` 클래스)이 있으면 그 안(또는 그 자신)의 본문
+   *  2. 없으면 추정: 글 상세 경로에서 `[data-g7-anchor="post-actions"]`(버튼 줄) 앞의 마지막 본문.
+   *     버튼 줄이 없으면 글자가 가장 많은 본문.
+   * 편집 영역·모달·댓글 영역 안의 `.ck-content` 는 후보가 아니다.
+   */
+  function findMainBody(root) {
+    root = root || document;
+    var marked = root.querySelector('[' + POST_BODY_ATTR + '], .' + POST_BODY_CLASS);
+    if (marked) {
+      if (marked.classList && marked.classList.contains('ck-content') && !isEditingArea(marked)) return marked;
+      var inner = marked.querySelectorAll('.ck-content');
+      for (var k = 0; k < inner.length; k++) {
+        if (!isEditingArea(inner[k]) && !inner[k].closest(NOT_POST_BODY)) return inner[k];
+      }
+      return null;
+    }
+    if (routeKind() !== 'detail') return null;
+    var all = root.querySelectorAll('.ck-content');
+    var cands = [];
+    for (var i = 0; i < all.length; i++) {
+      var c = all[i];
+      if (isEditingArea(c) || c.closest(NOT_POST_BODY)) continue;
+      cands.push(c);
+    }
+    if (!cands.length) return null;
+    var actions = root.querySelector('[data-g7-anchor="post-actions"]');
+    if (actions && actions.compareDocumentPosition) {
+      var best = null;
+      for (var j = 0; j < cands.length; j++) {
+        // 후보가 버튼 줄보다 앞(PRECEDING 아님 = 버튼 줄이 뒤 = FOLLOWING)
+        if (cands[j].compareDocumentPosition(actions) & 4) best = cands[j];
+      }
+      return best;
+    }
+    var most = null;
+    var mostLen = -1;
+    for (var n = 0; n < cands.length; n++) {
+      var len = (cands[n].textContent || '').length;
+      if (len > mostLen) { most = cands[n]; mostLen = len; }
+    }
+    return most;
+  }
+
   function scanEditors() {
     // 동영상 업로드 바/이미지 복붙 둘 다 켜짐 여부를 각자 내부에서
     // 확인하므로(attachUploaderTo, attachPasteImageHandlerTo) 여기선 컨테이너 존재만
@@ -195,6 +265,7 @@
     // 꺼지면 이 순회 자체를 건너뛰었는데, 그러면 videoEnabled 와 무관한 다른
     // 기능까지 함께 막히므로 제거했다 — 각 attach 함수가 자기 설정을 스스로
     // 확인하는 현재 구조가 버그 없이 이미 검증됨, 원복하지 않고 유지)
+    try { ensureChunks(readSettings(), 'editor'); } catch (e) { warnOnce('chunks (editor)', e); }
     var containers = document.querySelectorAll('.ckeditor5-wrapper, [id^="ckeditor5-"]');
     for (var i = 0; i < containers.length; i++) {
       // 에디터가 실제로 붙었는지 확인 (editable 존재)
@@ -220,18 +291,35 @@
    *    `editorEnd()` 를 부른다. `boot(cfg)` 는 부팅 run() 첫머리에서 한 번.
    *  - `install()` 은 등록 직후 그 자리에서 바로 부른다(= 번들 평가 중 그 조각의 위치).
    *  - 받기만 하고 아직 부르지 않는 항목: settings·guard.
-   *  - `load` 는 'eager' 만 받는다(지연 로드는 자리만 둔다).
+   *  - `load` 는 'eager'(전역 번들) 또는 'chunk'(지연 로드 묶음 파일, 07-chunks) 를 받는다.
+   *  - `core.editorConfig(fn)`: 본문 에디터 생성 설정을 고치는 함수 목록(70-code-format 의 `ClassicEditor.create`
+   *    감싸기가 등록 순서대로 부른다). fn(el, cfg) 는 고친 설정 복사본이나 cfg 를 그대로 돌려준다.
    */
 
   var sections = []; // 등록된 섹션 spec — 방문자 order 오름차순, order 없는 섹션은 뒤
   var editorSections = []; // 편집기 섹션 spec — editorOrder 오름차순, editorOrder 없는 섹션은 뒤
   var namespaces = {};
+  var editorConfigHooks = []; // 본문 에디터 생성 설정 보강 함수(등록 순)
+  var editorConfigWaits = []; // 생성 전에 기다릴 것을 돌려주는 함수(el) → Promise|null. 각자 시간 상한을 둔다
 
   var core = {
     id: IDENTIFIER,
     section: registerSection,
-    ns: function (name) { return namespaces[name] || (namespaces[name] = {}); }
+    ns: function (name) { return namespaces[name] || (namespaces[name] = {}); },
+    editorConfig: function (fn) { if (typeof fn === 'function') editorConfigHooks.push(fn); },
+    editorConfigWait: function (fn) { if (typeof fn === 'function') editorConfigWaits.push(fn); }
   };
+
+  /** 에디터 생성 전에 기다릴 Promise(모두 끝나거나 실패하면 풀림) 또는 null */
+  function editorConfigWait(el) {
+    var ps = [];
+    for (var i = 0; i < editorConfigWaits.length; i++) {
+      var p = null;
+      try { p = editorConfigWaits[i](el); } catch (e) { warnOnce('editor config wait ' + i, e); }
+      if (p && typeof p.then === 'function') ps.push(p.then(null, function () {}));
+    }
+    return ps.length ? Promise.all(ps) : null;
+  }
 
   function isVisitorSection(spec) {
     return spec.scope === 'visitor' || spec.scope === 'both';
@@ -254,7 +342,7 @@
     for (var i = 0; i < sections.length; i++) {
       if (sections[i].name === spec.name) { logger.warn('section: duplicate name ' + spec.name); return; }
     }
-    if (spec.load !== undefined && spec.load !== 'eager') { logger.warn('section: only eager load is supported: ' + spec.name); return; }
+    if (spec.load !== undefined && spec.load !== 'eager' && spec.load !== 'chunk') { logger.warn('section: load must be eager or chunk: ' + spec.name); return; }
     if (isVisitorSection(spec) && typeof spec.order !== 'number') { logger.warn('section: visitor order is required: ' + spec.name); return; }
     if (isEditorSection(spec) && spec.editor && typeof spec.editorOrder !== 'number') { logger.warn('section: editor order is required: ' + spec.name); return; }
     var at = sections.length;
@@ -308,11 +396,13 @@
     }
   }
 
-  /** 방문자 스캔 한 번이 끝난 뒤 */
+  /** 방문자 스캔 한 번이 끝난 뒤 (꺼진 섹션은 건너뛰고, 예외는 그 섹션만 건너뛴다) */
   function runVisitorEnds(ctx, cfg) {
     for (var i = 0; i < sections.length; i++) {
       var s = sections[i];
-      if (isVisitorSection(s) && s.visitorEnd) s.visitorEnd(ctx, cfg);
+      if (!isVisitorSection(s) || !s.visitorEnd) continue;
+      if (s.load === 'chunk' && s.enabled && !s.enabled(cfg)) continue;
+      try { s.visitorEnd(ctx, cfg); } catch (e) { warnOnce('section ' + s.name + ' (visitorEnd)', e); }
     }
   }
 
@@ -333,9 +423,102 @@
   /** 편집기 스캔 한 번이 끝난 뒤(컨테이너 목록과 무관) */
   function runEditorEnds() {
     for (var i = 0; i < editorSections.length; i++) {
-      if (editorSections[i].editorEnd) editorSections[i].editorEnd();
+      if (editorSections[i].editorEnd) { try { editorSections[i].editorEnd(); } catch (e) { warnOnce('section ' + editorSections[i].name + ' (editorEnd)', e); } }
     }
   }
+
+  /* ================================================================ *
+   *  지연 로드 묶음 (1.7.0)
+   * ================================================================ *
+   *  글 보기(B)·글쓰기 도우미(C) 코드는 전역 번들에 넣지 않고 별도 파일(`dist/js/<묶음>.js`)로 둔다.
+   *  기능이 켜져 있고 그 화면일 때만 `<script>` 하나를 넣어 불러온다(꺼져 있으면 요청 0).
+   *  - 묶음 파일은 `window.__G7Ckeditor5Superpack.chunk(이름, function (core) { … })` 를 부르고,
+   *    그 안에서 `core.section({ load: 'chunk', … })` 로 섹션을 등록한다. 등록 뒤 두 스캔을 다시 돈다.
+   *  - 주소는 코어 공개 에셋 경로(`/api/plugins/assets/<id>/<경로>`, 확장자 없는 모드면 `?file=`)에
+   *    `cache_version` 을 붙인다. 확장을 갱신하면 코어가 이 값을 바꾼다.
+   *  - 묶음 선언(`declareChunk`)은 `want(cfg)`(설정)·`where(cfg)`(화면)·`phase`(visitor|editor)를 갖는다.
+   */
+
+  var chunks = {}; // 이름 -> { spec, state: idle|loading|ready|error }
+
+  function declareChunk(spec) {
+    chunks[spec.name] = { spec: spec, state: 'idle' };
+  }
+
+  /** 묶음 파일 주소 */
+  function chunkUrl(name) {
+    var c = window.G7Config || {};
+    var path = 'dist/js/' + name + '.js';
+    var v = c.cache_version;
+    var mode = c.assetUrlMode || window.__g7AssetUrlMode || 'extension';
+    var base = '/api/plugins/assets/' + IDENTIFIER;
+    if (mode === 'extensionless') {
+      return base + '?file=' + encodeURIComponent(path) + (v != null ? '&v=' + encodeURIComponent(v) : '');
+    }
+    return base + '/' + path + (v != null ? '?v=' + encodeURIComponent(v) : '');
+  }
+
+  /** 이 단계(visitor|editor)의 묶음 중 필요한 것을 불러온다. 스캔 첫머리에서 부른다. */
+  function ensureChunks(cfg, phase) {
+    for (var name in chunks) {
+      if (!Object.prototype.hasOwnProperty.call(chunks, name)) continue;
+      var c = chunks[name];
+      if (c.state !== 'idle' || c.spec.phase !== phase) continue;
+      var ok = false;
+      try { ok = !!(c.spec.want(cfg) && c.spec.where(cfg)); } catch (e) { warnOnce('chunk ' + name + ' (check)', e); }
+      if (ok) loadChunk(name);
+    }
+  }
+
+  function loadChunk(name) {
+    var c = chunks[name];
+    c.state = 'loading';
+    try {
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = chunkUrl(name);
+      s.setAttribute('data-ck5sp-chunk', name);
+      s.onerror = function () { c.state = 'error'; warnOnce('chunk ' + name, 'load failed'); };
+      (document.head || document.body).appendChild(s);
+    } catch (e) {
+      c.state = 'error';
+      warnOnce('chunk ' + name, e);
+    }
+  }
+
+  /** 묶음 파일이 부른다. 선언되지 않았거나 이미 받은 묶음은 무시한다. */
+  function acceptChunk(name, factory) {
+    var c = chunks[name];
+    if (!c || c.state === 'ready' || typeof factory !== 'function') return;
+    c.state = 'ready';
+    try { factory(core); } catch (e) { warnOnce('chunk ' + name, e); }
+    window.setTimeout(kick, 0);
+  }
+
+  // 묶음이 쓰는 코어 도우미(묶음은 IIFE 밖에서 평가되므로 core 로만 받는다)
+  core.t = function (key, fallback) { return t(key, fallback); };
+  core.esc = esc;
+  core.warnOnce = warnOnce;
+  core.logger = logger;
+  core.readSettings = readSettings;
+  core.isEditingArea = isEditingArea;
+  core.editorInstanceNear = editorInstanceNear;
+  core.findMainBody = findMainBody;
+  core.routeKind = routeKind;
+  core.authToken = authToken;
+  core.chunkUrl = chunkUrl;
+
+  /** 글 보기 기능 중 하나라도 켜져 있으면 true */
+  function viewWanted(cfg) {
+    return !!(cfg.viewToc || cfg.viewLightbox || cfg.viewFold || cfg.viewReadTime);
+  }
+
+  declareChunk({
+    name: 'view',
+    phase: 'visitor',
+    want: viewWanted,
+    where: function () { return !!findMainBody(); }
+  });
 
   /* ================================================================ *
    *  통합 스캔
@@ -346,6 +529,8 @@
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
+    pruneVisibleWaits();
+    try { ensureChunks(cfg, 'visitor'); } catch (e) { warnOnce('chunks (visitor)', e); }
     if (!visitorGateOpen(cfg)) { runGateClosedVisitors(root, cfg); return; }
 
     var contents;
@@ -364,6 +549,59 @@
 
     runVisitorEnds(ctx, cfg);
   }
+
+  /* ================================================================ *
+   *  공용 화면 진입 관찰자 (1.7.0)
+   * ================================================================ *
+   *  IntersectionObserver 하나를 모든 기능이 같이 쓴다(섹션은 자기 관찰자를 만들지 않는다).
+   *  `core.whenVisible(el, fn)`: el 이 화면(위아래 400px 여유 포함)에 들어오면 fn(el) 을 한 번 부른다.
+   *  관찰자가 없는 브라우저는 바로 부른다. 화면에서 떨어져 나간 대상은 방문자 스캔마다 관찰을 푼다.
+   */
+  var visObserver = null;
+  var visWaits = []; // { el, fns }
+
+  function runVisibleFns(w) {
+    for (var i = 0; i < w.fns.length; i++) {
+      try { w.fns[i](w.el); } catch (e) { warnOnce('whenVisible', e); }
+    }
+  }
+
+  function onIntersect(entries) {
+    for (var i = 0; i < entries.length; i++) {
+      if (!entries[i].isIntersecting && !(entries[i].intersectionRatio > 0)) continue;
+      var el = entries[i].target;
+      for (var j = 0; j < visWaits.length; j++) {
+        if (visWaits[j].el !== el) continue;
+        var w = visWaits.splice(j, 1)[0];
+        if (visObserver) visObserver.unobserve(el);
+        runVisibleFns(w);
+        break;
+      }
+    }
+  }
+
+  function whenVisible(el, fn) {
+    if (!el || typeof fn !== 'function') return;
+    if (typeof IntersectionObserver === 'undefined') { runVisibleFns({ el: el, fns: [fn] }); return; }
+    for (var i = 0; i < visWaits.length; i++) {
+      if (visWaits[i].el === el) { visWaits[i].fns.push(fn); return; }
+    }
+    if (!visObserver) visObserver = new IntersectionObserver(onIntersect, { rootMargin: '400px 0px' });
+    visWaits.push({ el: el, fns: [fn] });
+    visObserver.observe(el);
+  }
+
+  /** 문서에서 떨어져 나간 대기 대상을 정리한다(React 가 본문을 다시 넣은 경우 등). */
+  function pruneVisibleWaits() {
+    if (!visWaits.length) return;
+    visWaits = visWaits.filter(function (w) {
+      if (w.el.isConnected !== false) return true;
+      if (visObserver) visObserver.unobserve(w.el);
+      return false;
+    });
+  }
+
+  core.whenVisible = whenVisible;
 
   /* ================================================================ *
    *  관찰자 · 부팅
@@ -2395,14 +2633,34 @@
     return next;
   }
 
+  /** 등록된 생성 설정 보강 함수(`core.editorConfig`)를 순서대로 적용한다. 하나가 예외를 내면 그것만 건너뛴다. */
+  function applyEditorConfigHooks(el, cfg) {
+    var next = cfg;
+    for (var i = 0; i < editorConfigHooks.length; i++) {
+      try {
+        var r = editorConfigHooks[i](el, next);
+        if (r) next = r;
+      } catch (e) { warnOnce('editor config hook ' + i, e); }
+    }
+    return next;
+  }
+
+  /**
+   * 생성 전에 기다릴 것(글쓰기 도우미 설정 조회 등, `editorConfigWait`)이 있으면 기다린 뒤(상한 있음)
+   * 설정을 보강해 원래 create 를 부른다. 기다릴 것이 없으면 지금처럼 바로 부른다.
+   */
   function wrapClassicEditor(C) {
     if (!C || C.__ck5spCodeWrapped || typeof C.create !== 'function') return;
     var original = C.create;
     try {
       C.create = function (el, cfg) {
-        var next = cfg;
-        try { next = codeFormatConfig(el, cfg); } catch (e) { codeFormatWarn(e); next = cfg; }
-        return original.call(this, el, next);
+        var self = this;
+        var wait = null;
+        try { wait = editorConfigWait(el); } catch (e) { warnOnce('editor config wait', e); wait = null; }
+        if (!wait) return original.call(self, el, applyEditorConfigHooks(el, cfg));
+        return wait.then(function () {
+          return original.call(self, el, applyEditorConfigHooks(el, cfg));
+        });
       };
       C.__ck5spCodeWrapped = true;
     } catch (e) { codeFormatWarn(e); }
@@ -2483,6 +2741,10 @@
     load: 'eager',
     styles: [CODE_STYLE_ID],
     install: function () {
+      // 생성 설정 보강의 첫 항목 — 코드 서식(1.5.0 동작 그대로). 그 뒤에 다른 기능이 core.editorConfig 로 더한다.
+      editorConfigHooks.unshift(function (el, cfg) {
+        try { return codeFormatConfig(el, cfg); } catch (e) { codeFormatWarn(e); return cfg; }
+      });
       installCodeFormatHook();
       try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
     }
@@ -2681,5 +2943,9 @@
     init();
   }
 
-  window.__G7Ckeditor5Superpack = { rescan: function () { scan(document); } };
+  window.__G7Ckeditor5Superpack = {
+    rescan: function () { scan(document); },
+    // 지연 로드 묶음 파일(dist/js/<이름>.js)이 부른다 — 07-chunks.js
+    chunk: function (name, factory) { acceptChunk(name, factory); }
+  };
 })();

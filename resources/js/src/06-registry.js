@@ -10,18 +10,35 @@
    *    `editorEnd()` 를 부른다. `boot(cfg)` 는 부팅 run() 첫머리에서 한 번.
    *  - `install()` 은 등록 직후 그 자리에서 바로 부른다(= 번들 평가 중 그 조각의 위치).
    *  - 받기만 하고 아직 부르지 않는 항목: settings·guard.
-   *  - `load` 는 'eager' 만 받는다(지연 로드는 자리만 둔다).
+   *  - `load` 는 'eager'(전역 번들) 또는 'chunk'(지연 로드 묶음 파일, 07-chunks) 를 받는다.
+   *  - `core.editorConfig(fn)`: 본문 에디터 생성 설정을 고치는 함수 목록(70-code-format 의 `ClassicEditor.create`
+   *    감싸기가 등록 순서대로 부른다). fn(el, cfg) 는 고친 설정 복사본이나 cfg 를 그대로 돌려준다.
    */
 
   var sections = []; // 등록된 섹션 spec — 방문자 order 오름차순, order 없는 섹션은 뒤
   var editorSections = []; // 편집기 섹션 spec — editorOrder 오름차순, editorOrder 없는 섹션은 뒤
   var namespaces = {};
+  var editorConfigHooks = []; // 본문 에디터 생성 설정 보강 함수(등록 순)
+  var editorConfigWaits = []; // 생성 전에 기다릴 것을 돌려주는 함수(el) → Promise|null. 각자 시간 상한을 둔다
 
   var core = {
     id: IDENTIFIER,
     section: registerSection,
-    ns: function (name) { return namespaces[name] || (namespaces[name] = {}); }
+    ns: function (name) { return namespaces[name] || (namespaces[name] = {}); },
+    editorConfig: function (fn) { if (typeof fn === 'function') editorConfigHooks.push(fn); },
+    editorConfigWait: function (fn) { if (typeof fn === 'function') editorConfigWaits.push(fn); }
   };
+
+  /** 에디터 생성 전에 기다릴 Promise(모두 끝나거나 실패하면 풀림) 또는 null */
+  function editorConfigWait(el) {
+    var ps = [];
+    for (var i = 0; i < editorConfigWaits.length; i++) {
+      var p = null;
+      try { p = editorConfigWaits[i](el); } catch (e) { warnOnce('editor config wait ' + i, e); }
+      if (p && typeof p.then === 'function') ps.push(p.then(null, function () {}));
+    }
+    return ps.length ? Promise.all(ps) : null;
+  }
 
   function isVisitorSection(spec) {
     return spec.scope === 'visitor' || spec.scope === 'both';
@@ -44,7 +61,7 @@
     for (var i = 0; i < sections.length; i++) {
       if (sections[i].name === spec.name) { logger.warn('section: duplicate name ' + spec.name); return; }
     }
-    if (spec.load !== undefined && spec.load !== 'eager') { logger.warn('section: only eager load is supported: ' + spec.name); return; }
+    if (spec.load !== undefined && spec.load !== 'eager' && spec.load !== 'chunk') { logger.warn('section: load must be eager or chunk: ' + spec.name); return; }
     if (isVisitorSection(spec) && typeof spec.order !== 'number') { logger.warn('section: visitor order is required: ' + spec.name); return; }
     if (isEditorSection(spec) && spec.editor && typeof spec.editorOrder !== 'number') { logger.warn('section: editor order is required: ' + spec.name); return; }
     var at = sections.length;
@@ -98,11 +115,13 @@
     }
   }
 
-  /** 방문자 스캔 한 번이 끝난 뒤 */
+  /** 방문자 스캔 한 번이 끝난 뒤 (꺼진 섹션은 건너뛰고, 예외는 그 섹션만 건너뛴다) */
   function runVisitorEnds(ctx, cfg) {
     for (var i = 0; i < sections.length; i++) {
       var s = sections[i];
-      if (isVisitorSection(s) && s.visitorEnd) s.visitorEnd(ctx, cfg);
+      if (!isVisitorSection(s) || !s.visitorEnd) continue;
+      if (s.load === 'chunk' && s.enabled && !s.enabled(cfg)) continue;
+      try { s.visitorEnd(ctx, cfg); } catch (e) { warnOnce('section ' + s.name + ' (visitorEnd)', e); }
     }
   }
 
@@ -123,7 +142,7 @@
   /** 편집기 스캔 한 번이 끝난 뒤(컨테이너 목록과 무관) */
   function runEditorEnds() {
     for (var i = 0; i < editorSections.length; i++) {
-      if (editorSections[i].editorEnd) editorSections[i].editorEnd();
+      if (editorSections[i].editorEnd) { try { editorSections[i].editorEnd(); } catch (e) { warnOnce('section ' + editorSections[i].name + ' (editorEnd)', e); } }
     }
   }
 

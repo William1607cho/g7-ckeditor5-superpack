@@ -29,4 +29,8 @@
     init();
   }
 
-  window.__G7Ckeditor5Superpack = { rescan: function () { scan(document); } };
+  window.__G7Ckeditor5Superpack = {
+    rescan: function () { scan(document); },
+    // 지연 로드 묶음 파일(dist/js/<이름>.js)이 부른다 — 07-chunks.js
+    chunk: function (name, factory) { acceptChunk(name, factory); }
+  };

@@ -57,14 +57,34 @@
     return next;
   }
 
+  /** 등록된 생성 설정 보강 함수(`core.editorConfig`)를 순서대로 적용한다. 하나가 예외를 내면 그것만 건너뛴다. */
+  function applyEditorConfigHooks(el, cfg) {
+    var next = cfg;
+    for (var i = 0; i < editorConfigHooks.length; i++) {
+      try {
+        var r = editorConfigHooks[i](el, next);
+        if (r) next = r;
+      } catch (e) { warnOnce('editor config hook ' + i, e); }
+    }
+    return next;
+  }
+
+  /**
+   * 생성 전에 기다릴 것(글쓰기 도우미 설정 조회 등, `editorConfigWait`)이 있으면 기다린 뒤(상한 있음)
+   * 설정을 보강해 원래 create 를 부른다. 기다릴 것이 없으면 지금처럼 바로 부른다.
+   */
   function wrapClassicEditor(C) {
     if (!C || C.__ck5spCodeWrapped || typeof C.create !== 'function') return;
     var original = C.create;
     try {
       C.create = function (el, cfg) {
-        var next = cfg;
-        try { next = codeFormatConfig(el, cfg); } catch (e) { codeFormatWarn(e); next = cfg; }
-        return original.call(this, el, next);
+        var self = this;
+        var wait = null;
+        try { wait = editorConfigWait(el); } catch (e) { warnOnce('editor config wait', e); wait = null; }
+        if (!wait) return original.call(self, el, applyEditorConfigHooks(el, cfg));
+        return wait.then(function () {
+          return original.call(self, el, applyEditorConfigHooks(el, cfg));
+        });
       };
       C.__ck5spCodeWrapped = true;
     } catch (e) { codeFormatWarn(e); }
@@ -145,6 +165,10 @@
     load: 'eager',
     styles: [CODE_STYLE_ID],
     install: function () {
+      // 생성 설정 보강의 첫 항목 — 코드 서식(1.5.0 동작 그대로). 그 뒤에 다른 기능이 core.editorConfig 로 더한다.
+      editorConfigHooks.unshift(function (el, cfg) {
+        try { return codeFormatConfig(el, cfg); } catch (e) { codeFormatWarn(e); return cfg; }
+      });
       installCodeFormatHook();
       try { injectCodeStyle(); } catch (e) { codeFormatWarn(e); }
     }

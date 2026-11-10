@@ -7,6 +7,8 @@
   function scan(root) {
     root = root || document;
     var cfg = readSettings();
+    pruneVisibleWaits();
+    try { ensureChunks(cfg, 'visitor'); } catch (e) { warnOnce('chunks (visitor)', e); }
     if (!visitorGateOpen(cfg)) { runGateClosedVisitors(root, cfg); return; }
 
     var contents;
@@ -25,6 +27,59 @@
 
     runVisitorEnds(ctx, cfg);
   }
+
+  /* ================================================================ *
+   *  공용 화면 진입 관찰자 (1.7.0)
+   * ================================================================ *
+   *  IntersectionObserver 하나를 모든 기능이 같이 쓴다(섹션은 자기 관찰자를 만들지 않는다).
+   *  `core.whenVisible(el, fn)`: el 이 화면(위아래 400px 여유 포함)에 들어오면 fn(el) 을 한 번 부른다.
+   *  관찰자가 없는 브라우저는 바로 부른다. 화면에서 떨어져 나간 대상은 방문자 스캔마다 관찰을 푼다.
+   */
+  var visObserver = null;
+  var visWaits = []; // { el, fns }
+
+  function runVisibleFns(w) {
+    for (var i = 0; i < w.fns.length; i++) {
+      try { w.fns[i](w.el); } catch (e) { warnOnce('whenVisible', e); }
+    }
+  }
+
+  function onIntersect(entries) {
+    for (var i = 0; i < entries.length; i++) {
+      if (!entries[i].isIntersecting && !(entries[i].intersectionRatio > 0)) continue;
+      var el = entries[i].target;
+      for (var j = 0; j < visWaits.length; j++) {
+        if (visWaits[j].el !== el) continue;
+        var w = visWaits.splice(j, 1)[0];
+        if (visObserver) visObserver.unobserve(el);
+        runVisibleFns(w);
+        break;
+      }
+    }
+  }
+
+  function whenVisible(el, fn) {
+    if (!el || typeof fn !== 'function') return;
+    if (typeof IntersectionObserver === 'undefined') { runVisibleFns({ el: el, fns: [fn] }); return; }
+    for (var i = 0; i < visWaits.length; i++) {
+      if (visWaits[i].el === el) { visWaits[i].fns.push(fn); return; }
+    }
+    if (!visObserver) visObserver = new IntersectionObserver(onIntersect, { rootMargin: '400px 0px' });
+    visWaits.push({ el: el, fns: [fn] });
+    visObserver.observe(el);
+  }
+
+  /** 문서에서 떨어져 나간 대기 대상을 정리한다(React 가 본문을 다시 넣은 경우 등). */
+  function pruneVisibleWaits() {
+    if (!visWaits.length) return;
+    visWaits = visWaits.filter(function (w) {
+      if (w.el.isConnected !== false) return true;
+      if (visObserver) visObserver.unobserve(w.el);
+      return false;
+    });
+  }
+
+  core.whenVisible = whenVisible;
 
   /* ================================================================ *
    *  관찰자 · 부팅
