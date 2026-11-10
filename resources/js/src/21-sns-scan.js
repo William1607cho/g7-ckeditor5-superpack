@@ -55,6 +55,7 @@
     load: 'eager',
     gate: function (cfg) { return cfg.snsEnabled; },
     styles: [EMBED_STYLE_ID],
+    boot: function () { bindYoutubeFacade(); },
     visitor: snsEmbedVisitor,
     visitorEnd: snsEmbedVisitorEnd
   });

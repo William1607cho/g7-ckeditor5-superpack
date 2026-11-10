@@ -3,7 +3,9 @@
         "media_embed": {
             "unsupported": "This embed is not supported. Showing a link instead.",
             "view_on": "View on {platform}",
-            "open_link": "Open link"
+            "open_link": "Open link",
+            "play": "Play YouTube video",
+            "yt_title": "YouTube video"
         },
         "video": {
             "open": "Open video source"
