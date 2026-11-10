@@ -7,6 +7,23 @@
             "play": "YouTube 동영상 재생",
             "yt_title": "YouTube 동영상"
         },
+        "readtime": {
+            "minutes": "약 {n}분"
+        },
+        "toc": {
+            "title": "목차"
+        },
+        "fold": {
+            "open": "펼치기",
+            "close": "접기"
+        },
+        "lightbox": {
+            "dialog": "이미지 크게 보기",
+            "close": "닫기",
+            "prev": "이전 이미지",
+            "next": "다음 이미지",
+            "original": "원본 보기"
+        },
         "video": {
             "open": "동영상 원본 열기"
         },

@@ -7,6 +7,23 @@
             "play": "Play YouTube video",
             "yt_title": "YouTube video"
         },
+        "readtime": {
+            "minutes": "{n} min read"
+        },
+        "toc": {
+            "title": "Contents"
+        },
+        "fold": {
+            "open": "Expand",
+            "close": "Collapse"
+        },
+        "lightbox": {
+            "dialog": "Enlarged image",
+            "close": "Close",
+            "prev": "Previous image",
+            "next": "Next image",
+            "original": "View original"
+        },
         "video": {
             "open": "Open video source"
         },
