@@ -52,6 +52,23 @@ test('댓글 에디터·바깥 요소는 건드리지 않는다', () => {
   assert.equal(win.CKEDITOR.ClassicEditor.create(fakeEl([]), c3), c3);
 });
 
+test('글자 수 켜짐: 사용자 글쓰기 화면 본문 에디터에만 WordCount(로그인 상태를 아직 몰라도)', () => {
+  const mk = (path, settings) => {
+    const { win } = loadGlobal({ path, settings });
+    const WordCount = { name: 'WordCount' };
+    win.CKEDITOR = { Code: {}, CodeBlock: {}, WordCount };
+    win.CKEDITOR.ClassicEditor = { create(el, cfg) { return cfg; } };
+    return { win, WordCount };
+  };
+  let { win, WordCount } = mk('/board/free/write', { write_count_enabled: true });
+  assert.ok(win.CKEDITOR.ClassicEditor.create(fakeEl(['div[id^="ckeditor5-"]']), baseCfg()).extraPlugins.includes(WordCount));
+  assert.equal((win.CKEDITOR.ClassicEditor.create(fakeEl(['.g7ce-wrapper']), baseCfg()).extraPlugins || []).includes(WordCount), false);
+  ({ win, WordCount } = mk('/board/free/write', { write_count_enabled: false }));
+  assert.equal(win.CKEDITOR.ClassicEditor.create(fakeEl(['div[id^="ckeditor5-"]']), baseCfg()).extraPlugins.includes(WordCount), false);
+  ({ win, WordCount } = mk('/admin/board/free/write', { write_count_enabled: true }));
+  assert.equal(win.CKEDITOR.ClassicEditor.create(fakeEl(['div[id^="ckeditor5-"]']), baseCfg()).extraPlugins.includes(WordCount), false);
+});
+
 test('설정에서 끄면 버튼을 넣지 않는다', () => {
   const { core, win } = loadGlobal({ path: '/board/free/write', settings: { codeformat_enabled: false } });
   win.CKEDITOR = { Code: {}, CodeBlock: {} };

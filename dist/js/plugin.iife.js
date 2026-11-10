@@ -553,11 +553,12 @@
   });
 
   // 글자 수(1.7.0): 켜져 있으면 빌드 내장 WordCount 를 사용자 글쓰기 화면의 본문 에디터에만 더한다.
-  // 플러그인은 에디터 생성 때만 넣을 수 있어 전역에 둔다(화면 표시는 write 묶음).
+  // 플러그인은 에디터 생성 때만 넣을 수 있어 전역에 둔다(화면 표시는 write 묶음, 로그인 사용자만).
+  // 새로 고침 직후에는 에디터가 로그인 상태보다 먼저 만들어질 수 있어, 여기서는 로그인을 따지지 않는다.
   core.editorConfig(function (el, cfg) {
     var CK = window.CKEDITOR;
     if (!cfg || !CK || !CK.WordCount || !isPostEditorEl(el)) return cfg;
-    if (!writeWanted(readSettings()) || !readSettings().writeCount) return cfg;
+    if (!readSettings().writeCount || routeKind() !== 'write') return cfg;
     var plugins = Array.isArray(cfg.plugins) ? cfg.plugins : [];
     var extra = Array.isArray(cfg.extraPlugins) ? cfg.extraPlugins : [];
     if (plugins.indexOf(CK.WordCount) !== -1 || extra.indexOf(CK.WordCount) !== -1) return cfg;
