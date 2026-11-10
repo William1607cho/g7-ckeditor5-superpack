@@ -5,6 +5,87 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Planned as 1.7.0 (`plugin.json` and `composer.json` already say 1.7.0).
+
+### Changed (no setting — applies to existing posts after updating)
+
+- **YouTube embeds show a thumbnail and a play button first.** The video
+  thumbnail is loaded from the YouTube image server (lazy, no referrer); clicking
+  the play button creates the `youtube-nocookie.com` player in the same box and
+  starts playback. Until then no player page or script is loaded. Bot (SSR) pages
+  are unchanged — they never ran the script and still show the plain link.
+- **Embeds and local videos connect when they come into view.** X, Instagram and
+  TikTok scripts are requested only when the first embed is near the viewport;
+  local video players (and their metadata request) are created at the same
+  moment, with a same-size placeholder before that.
+
+### Added
+
+- **Post view** settings tab (all off by default; post body on the post detail
+  screen only — not pages, the original-post box of a reply, terms dialogs or
+  comments):
+  - **Table of contents** for 3+ headings (toolbar or Markdown), with on-screen
+    heading anchors; collapsible, collapsed on narrow screens.
+  - **Image lightbox** for body images (the original-image link added by
+    `g7-image-delivery`, or images outside any link): previous/next, arrow keys,
+    swipe, Esc, focus trap. Images linked to another address are left alone.
+  - **Collapsible sections** from a `[접기] title` line to a `[/접기]` line. With
+    the setting off, the marker text stays visible in existing posts.
+  - **Reading time** line ("about N min") at the top of the body.
+- **Writing helpers** settings tab (all off by default; post body editor on the
+  user write and edit screens only — not the comment box or admin screens):
+  - **Draft autosave and restore** in the browser for signed-in users: offered on
+    return, removed on a successful submit, 7-day expiry, 500 KB per draft, 10
+    drafts per user. Nothing is saved while the private-post option is checked.
+  - **Character count** (with and without spaces) under the editor, using the
+    CKEditor build's own WordCount plugin.
+- Post view and writing-helper code lives in two separate files (`dist/js/view.js`,
+  `dist/js/write.js`) that are loaded only when one of their features is on and
+  the screen needs it. With everything off, no extra file is requested.
+- `GET /api/plugins/g7-ckeditor5-superpack/write-config` (signed-in users only)
+  tells the write screen whether the writing helpers are on. These settings are
+  not put in the visitor page settings.
+- Template authors can mark the post body with a `data-g7-post-body` attribute
+  (or a `g7-post-body` class) on the body element or a wrapper. Without the marker
+  the body is detected from the post detail route and the post action row.
+
+### Security
+
+- **Link previews block multicast addresses** (`224.0.0.0/4`, `ff00::/8`), which
+  PHP's global-range check lets through.
+- **Rejected addresses are no longer stored as failed cache rows**; they are
+  remembered for 10 minutes in the application cache instead.
+- **Bot challenge pages** (Cloudflare "Just a moment…", `cf-mitigated`
+  header, DDoS-Guard, captcha pages) are no longer turned into minimal cards and
+  are not cached anywhere. Before, their title was cached for the success TTL.
+
+### Fixed
+
+- **Link previews of non-UTF-8 pages** (EUC-KR, Shift_JIS, GBK, Big5, Latin-1, …)
+  are converted to UTF-8 using the response or `<meta>` charset instead of showing
+  replacement characters.
+
+### Internal
+
+- One shared `IntersectionObserver` (`core.whenVisible`) for every feature.
+- Sections may be registered from a lazy bundle (`load: 'chunk'`) through
+  `window.__G7Ckeditor5Superpack.chunk(name, factory)`.
+- The `ClassicEditor.create` wrapper now applies a list of config hooks
+  (`core.editorConfig`, `core.editorConfigWait`); code formatting is the first.
+- `scripts/build-js.sh` builds three bundles; `--check` covers all of them.
+- The post editor is found by the sirsoft-ckeditor5 1.1 container id
+  (`id="ckeditor5-<name>"`) as well as the older `ckeditor5-wrapper` class.
+
+### Tests
+
+- PHP unit tests for the multicast ranges, `LinkPreviewCharset`,
+  `BotChallengeDetector`, settings consistency (eight places) and the route
+  limiter names. JS tests (`node --test`, no DOM) for the route kind, bundle URL,
+  table-of-contents model, fold markers, reading time, lightbox targets,
+  character count and draft keys.
+
 ## [1.6.1] - 2026-10-11
 
 ### Fixed

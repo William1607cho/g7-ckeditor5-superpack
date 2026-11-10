@@ -11,7 +11,7 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
 /**
  * CKEditor 5 슈퍼팩 플러그인 (g7-ckeditor5-superpack)
  *
- * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 기능 7가지를 더한다.
+ * CKEditor 5(`sirsoft-ckeditor5`)로 작성한 게시글 본문에 기능 9가지를 더한다(8·9는 1.7.0).
  *
  *  1. **SNS 링크 자동 임베드** — 본문에 단독으로 붙여넣은 YouTube·X(Twitter)·Instagram·TikTok
  *     링크를 방문자 화면에서 각 플랫폼 임베드로 치환한다.
@@ -44,6 +44,12 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
  *  7. **코드 서식** — 게시글 본문 에디터 툴바에 코드·코드 블록 버튼을 더하고(설치된 CKEditor
  *     빌드의 Code·CodeBlock), 저장된 코드(툴바 코드와 마크다운 코드)를 같은 모양으로 보여 주며,
  *     글 보기 화면의 코드 블록에 복사 버튼을 단다.
+ *  8. **글 보기** (1.7.0, 기본 꺼짐) — 글 상세 화면의 글 본문에 목차·이미지 확대 보기·접기/펼치기·읽는 시간.
+ *     코드는 지연 로드 파일 `dist/js/view.js` 에 있고, 켜진 기능이 있을 때만 불러온다.
+ *  9. **글쓰기 도우미** (1.7.0, 기본 꺼짐) — 사용자 글쓰기·수정 화면의 본문 에디터에 임시 저장·복구와 글자 수.
+ *     `dist/js/write.js`. 켜짐 여부는 방문자 설정에 싣지 않고 로그인 사용자 전용 `write-config` API 로 준다.
+ *  (1.7.0, 설정 없음) 유튜브는 썸네일+재생 버튼으로 먼저 보이고, 임베드·동영상은 화면에 들어올 때 연결한다.
+ *  (1.7.0) 링크 프리뷰: 멀티캐스트 차단, 거절 주소는 10분 임시 캐시, 봇 챌린지 페이지 미저장, 문자셋 변환.
  *
  * 아키텍처: 프론트 렌더 로직은 `loading.strategy = global` 로 전 페이지에 로드되는
  * `dist/js/plugin.iife.js` 가 `.ck-content` 를 자체 스캔(+MutationObserver)해 수행한다.
@@ -62,9 +68,10 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
  * (`App\Support\ImageResizer::resizeInPlace()`)만 g7 코어의 정식 업스트림 기능
  * (v7.0.6+)이라 그대로 쓴다 — 이 플러그인이 재구현하지 않는다.
  *
- * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 7개
+ * 설정은 관리자 화면(`/admin/plugins/g7-ckeditor5-superpack/settings`)의 탭 9개
  * (SNS 임베드 / 외부 링크 카드화 / 로컬 동영상 업로드 / 마크다운 자동 변환 /
- * 에디터 스타일 / 이미지 복붙 / 코드 서식)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
+ * 에디터 스타일 / 이미지 복붙 / 코드 서식 / 글 보기 / 글쓰기 도우미)에서 기능별로 조정한다. 각 기능을 끄면 해당 동작을 건너뛴다.
+ * 이 파일은 1.7.0 에서 새로 만든 클래스·상수를 부르지 않는다(plugin:update 1회차에 옛 클래스가 메모리에 남는 경우 대비).
  * (코드 서식 탭은 에디터 버튼만 켜고 끈다. 저장된 코드의 표시 스타일은 항상 적용된다.)
  *
  * 참고(과거 이력): "이미지 복붙허용"이라는 이름으로 외부 이미지 URL을 서버가 대신

@@ -3,12 +3,13 @@
 [![Release](https://img.shields.io/github/v/release/William1607cho/g7-ckeditor5-superpack?sort=semver)](https://github.com/William1607cho/g7-ckeditor5-superpack/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds seven
+A [Gnuboard7](https://github.com/gnuboard/g7) plugin that adds nine
 enhancements to posts written with the **`sirsoft-ckeditor5`** editor — **without
 modifying the editor itself**:
 
 1. **SNS embeds** — a YouTube / X (Twitter) / Instagram / TikTok link on its own line
-   becomes a platform embed on the visitor-facing page.
+   becomes a platform embed on the visitor-facing page. YouTube shows a thumbnail and
+   a play button until clicked; embeds and videos connect when they come into view.
 2. **External link cards** — any other external link becomes an OpenGraph card
    (thumbnail + title + summary + domain) or a minimal card (favicon + title + domain).
 3. **Local video upload** — an *Upload video* button above the editor uploads MP4 / MOV
@@ -23,14 +24,20 @@ modifying the editor itself**:
 7. **Code formatting** — *Code* and *Code block* buttons in the post editor toolbar.
    Code is saved as real `<code>` / `<pre>`, so its text is shown as typed. Code
    blocks in a viewed post get a copy button.
+8. **Post view** (1.7.0, each off by default) — a table of contents, an image
+   lightbox, collapsible `[접기]` sections and a reading-time line for the post body
+   on the post detail screen.
+9. **Writing helpers** (1.7.0, each off by default) — draft autosave and restore in
+   the browser, and a character count under the post editor.
 
 For embeds, link cards, video and Markdown the stored content is just plain
 `<a href>` links and the original text; the conversion happens on the
 visitor-facing page. Editor style is a CSS rule, image paste uploads through the
 editor's own upload path, and code formatting stores standard `<code>` / `<pre>`.
-Everything runs from one globally-loaded script (plus, for the editor button and
-media library, in the write screen). Each feature has its own on/off switch and
-detailed options in the admin screen.
+Post view and writing helpers never change stored content either.
+Everything runs from one globally-loaded script; the post-view and writing-helper
+code is in two small extra files that are loaded only when one of their features is
+on. Each feature has its own on/off switch and detailed options in the admin screen.
 
 한국어 사용 안내는 아래 [사용법 (한국어)](#사용법-한국어) 절을 참고하세요.
 
@@ -54,6 +61,13 @@ In the write screen it injects the *Upload video* button and a media-library str
 above the editor using `element.ckeditorInstance`. For code formatting it adds the
 build's own Code / CodeBlock plugins to the post editor's config at creation time
 (by wrapping `ClassicEditor.create`), so `sirsoft-ckeditor5` stays untouched.
+
+Post view (`dist/js/view.js`) and writing helpers (`dist/js/write.js`) are separate
+files. The global script adds one `<script>` for them only when one of their features
+is on and the screen needs it (a post body on a post detail page / the post editor on a
+user write or edit page). With everything off, no extra file is requested. The
+writing-helper switches are not exposed to visitors: a signed-in user's write screen
+asks `GET /api/plugins/g7-ckeditor5-superpack/write-config`.
 
 Turning a feature off in the settings makes the script skip that scan entirely.
 
@@ -112,7 +126,7 @@ kept identical and both are committed.
 ## Usage
 
 Open **Admin → Plugins → CKEditor 5 Superpack → Settings**
-(`/admin/plugins/g7-ckeditor5-superpack/settings`). Seven tabs, one per feature.
+(`/admin/plugins/g7-ckeditor5-superpack/settings`). Nine tabs, one per feature group.
 
 ### 1. SNS embeds
 
@@ -120,7 +134,7 @@ Paste a link **on its own line** in the post body — nothing else to do.
 
 | Platform | Rendering |
 | --- | --- |
-| YouTube · YouTube Shorts | `youtube-nocookie.com/embed` iframe (no script) |
+| YouTube · YouTube Shorts | thumbnail + play button; on click a `youtube-nocookie.com/embed` iframe (autoplay) |
 | X (Twitter) | official `widgets.js`, loaded once |
 | Instagram (posts · reels) | official `embed.js` |
 | TikTok | official `embed.js` |
@@ -128,6 +142,12 @@ Paste a link **on its own line** in the post body — nothing else to do.
 Every embed keeps a permanent "view on …" link, so it degrades to a link if the
 platform script is blocked. Tracking / consent query parameters (`?utm_source`,
 `?is_from_webapp`, …) are stripped before embedding.
+
+**Lighter pages (1.7.0, always on):** a YouTube embed first shows the video
+thumbnail (`i.ytimg.com`, lazy, no referrer) and a play button; the player is
+created only when the visitor clicks. X, Instagram and TikTok scripts are requested
+only when the first embed comes near the viewport, and local video players are
+created at that moment too. Bot (SSR) pages are unchanged.
 
 **Settings:** master on/off · per-platform on/off · YouTube Shorts aspect ratio
 (9:16 / 1:1 / 4:5 / 16:9 — the URL alone cannot tell the real orientation, so
@@ -158,7 +178,10 @@ visitor page.
 - **Address checks on every hop.** Every resolved IP must be a global address
   (`FILTER_FLAG_GLOBAL_RANGE`), and the plugin also blocks `100.64.0.0/10` (CGNAT,
   e.g. Tailscale), `198.18.0.0/15`, `192.0.0.0/24`, `0.0.0.0/8`, `fc00::/7`,
-  `fe80::/10`, `64:ff9b::/96` and `2002::/16`.
+  `fe80::/10`, `64:ff9b::/96`, `2002::/16` and (1.7.0) the multicast ranges
+  `224.0.0.0/4` and `ff00::/8`.
+  - An address rejected by these checks (1.7.0) does not create a failed cache row;
+    it is remembered for 10 minutes in the application cache.
   - IPv4-mapped / IPv4-compatible IPv6 addresses (`::ffff:127.0.0.1`) are checked by
     their embedded IPv4.
   - Numeric host forms (`2130706433`, `0177.0.0.1`, `0x7f.1`) are checked as the IP
@@ -177,6 +200,12 @@ visitor page.
   - Timeouts: 3 s to connect, 8 s in total across all hops.
 - **Rate limits on real fetches only.** At most 120 per minute site-wide and 20 per
   minute per target host. Over the limit, the answer is `failed` and nothing is cached.
+- **Bot challenge pages (1.7.0).** A Cloudflare "Just a moment…" page (or a
+  `cf-mitigated: challenge` header, DDoS-Guard, captcha markers on a 403/429/503) is
+  not turned into a card and is not cached.
+- **Character sets (1.7.0).** The `<head>` is converted to UTF-8 from the response or
+  `<meta>` charset (EUC-KR/CP949, Shift_JIS, EUC-JP, GBK, GB18030, Big5, Latin-1)
+  before parsing.
 - **Cache cleanup.** A daily `g7-ckeditor5-superpack:prune-link-previews` command
   (00:30 in the scheduler's time) deletes rows past their TTL and keeps the table at
   50,000 rows at most by removing the oldest first. Run it by hand with `--dry-run`
@@ -351,11 +380,69 @@ autoformat, no new shortcuts).
   as shown and shows a check mark for 1.5 seconds. Inline code and the editors get
   no button, it is hidden when printing, and it does not depend on the setting.
 
+### 8. Post view (1.7.0)
+
+Four switches, all off by default. They apply to **the post body on the post detail
+screen only** — not pages, the original-post box shown with a reply, terms / privacy
+dialogs, comments or editors. When at least one is on, a post page loads one extra
+small file (`dist/js/view.js`).
+
+- **Table of contents** — with 3 or more headings (toolbar headings or Markdown
+  headings), a collapsible "Contents" box is added at the top of the body. Levels
+  used in the post become up to three indent levels. Headings get ids on screen
+  only (an existing unique id is kept, otherwise `ck5-toc-<n>`); a link scrolls
+  smoothly and puts `#ck5-toc-<n>` in the address, and such an address scrolls to
+  the heading on load. It starts collapsed on narrow screens and is hidden in print.
+- **Image lightbox** — clicking a body image opens it over the page instead of a new
+  tab: previous / next buttons, ← / → keys, swipe, Esc to close, the largest
+  `srcset` candidate first and a "view original" link. Images wrapped by
+  `g7-image-delivery` in their own original-image link and images outside any link
+  are included; an image the author linked to another address keeps its link.
+  Ctrl / ⌘ / Shift / middle click still opens a new tab.
+- **Collapsible sections** — write a line `[접기] title`, the content, then a line
+  `[/접기]` (each marker on its own line). The part between becomes a collapsed box.
+  A marker without its partner stays as text; boxes do not nest. **When the setting
+  is off, existing posts show the marker text as-is**, and bot pages, list
+  summaries and feeds always show it.
+- **Reading time** — "about N min" at the top of the body: 500 Korean / Chinese /
+  Japanese characters or 200 words per minute, plus 6 seconds per image (60 seconds
+  at most); code blocks are not counted.
+
+**Which element is the post body?** A template can say so with a
+`data-g7-post-body` attribute (or a `g7-post-body` class) on the body element or on
+any wrapper around it. Without the marker, the plugin guesses: on a post detail URL
+(`/board/<slug>/<id>`) it takes the last post body before the post action row
+(`[data-g7-anchor="post-actions"]`, as in `wc-community`), or the body with the most
+text when there is no such row. This works with most templates, but check yours.
+
+### 9. Writing helpers (1.7.0)
+
+Two switches, all off by default. They apply to **the post body editor on the user
+write and edit screens** (`/board/<slug>/write`, `/board/<slug>/<id>/edit`) for
+signed-in users — not the comment box (`g7-comment-editor`) or admin screens. When
+at least one is on, the write screen loads one extra small file (`dist/js/write.js`).
+The switches are not exposed to visitors; the write screen asks
+`GET /api/plugins/g7-ckeditor5-superpack/write-config` (signed-in users only) and
+keeps the answer for 10 minutes in the tab.
+
+- **Draft autosave and restore** — the title and body are saved in this browser's
+  `localStorage` 1.5 s after a change; reopening the form shows "a saved draft
+  exists — Restore / Discard". A successful submit removes the draft; it also
+  expires after 7 days. 500 KB per draft and 10 drafts per user at most (oldest
+  first). Nothing is saved while the private-post checkbox is on (and the existing
+  draft is removed), while an upload is in progress, or for an empty / unchanged
+  form. CKEditor's Autosave plugin is not used: its pending action would keep the
+  submit button disabled through the upload guard.
+- **Character count** — "N characters · M without spaces" under the editor,
+  updated by the CKEditor build's own WordCount plugin (added to the post editor
+  only when this is on).
+
 ## Settings screen
 
 **Admin → Plugins → CKEditor 5 Superpack → Settings** shows a short description line
-and seven tabs, one per feature. Each tab has a master on/off switch at the top
-followed by that feature's detailed options:
+and nine tabs (the tab row wraps on narrow screens). Each of the first seven tabs has
+a master on/off switch at the top followed by that feature's detailed options; the
+last two have one switch per feature:
 
 - **SNS embeds** — per-platform on/off (YouTube · X · Instagram · TikTok) and the
   YouTube Shorts aspect ratio.
@@ -371,6 +458,10 @@ followed by that feature's detailed options:
 - **Image paste** — clipboard auto-upload on/off, PNG→WebP conversion on/off
   (independent of each other).
 - **Code formatting** — show the Code / Code block buttons on/off (on by default).
+- **Post view** — table of contents, image lightbox, collapsible sections, reading
+  time (each off by default).
+- **Writing helpers** — draft autosave and restore, character count (each off by
+  default).
 
 ## Known limitations
 
@@ -391,8 +482,13 @@ followed by that feature's detailed options:
 - **Link cards: DNS lookup time is outside the 8-second budget.** Lookups use
   PHP's resolver, which has no per-call timeout. A slow DNS answer can make one
   link-preview request take longer than 8 s.
-- **Link cards: non-UTF-8 pages** (e.g. EUC-KR) are not converted. Invalid bytes
-  are replaced, so titles from such pages can show replacement characters.
+- **Link cards: other character sets.** Since 1.7.0 the common legacy charsets are
+  converted; a page in a charset outside that list (or declaring none while not
+  being UTF-8) can still show replacement characters.
+- **Post view is screen-only.** Bot (SSR) pages, list summaries and feeds show the
+  body as stored: no table of contents or reading time, and `[접기]` markers as text.
+- **Drafts live in one browser.** They are not shared between devices or browsers,
+  and clearing site data removes them.
 - **Code blocks with a language class.** Plain text is the only code block language.
   An existing `<pre><code class="language-…">` opened and saved again in the editor
   keeps its class and also gets `language-plaintext`; the code text and its display
@@ -415,10 +511,18 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
 | `90` | `90-boot.js` | Boot (`init`, handler registration, `window.__G7Ckeditor5Superpack`) |
 | `99` | `99-tail.js` | Closes the IIFE |
 
-- `scripts/build-js.sh` joins the pieces in name order and writes the result to both
-  `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
-  identical). `scripts/build-js.sh --check` writes nothing and exits `1` if either
-  file is out of date.
+Lazy bundles (1.7.0) use the same bands in their own folders and are not part of the
+global script:
+
+| Folder | Output | Pieces |
+|---|---|---|
+| `resources/js/view/` | `dist/js/view.js` | `00-head`, `10-readtime` (B4), `20-toc` (B1), `30-fold` (B3), `40-lightbox` (B2), `99-tail` |
+| `resources/js/write/` | `dist/js/write.js` | `00-head`, `10-count` (C2), `20-draft` (C1), `99-tail` |
+
+- `scripts/build-js.sh` joins the pieces in name order and writes the global result to
+  both `dist/js/plugin.iife.js` and `resources/js/index.js` (the two files are always
+  identical), and each lazy bundle to its `dist/js/` file. `scripts/build-js.sh
+  --check` writes nothing and exits `1` if any output is out of date.
 - After editing a piece, always run `scripts/build-js.sh` and commit the rebuilt
   files. No npm or bundler is involved. `scripts/` is not included in release
   archives.
@@ -444,19 +548,39 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
     in `editorOrder`. `editorEnd()` runs after each editor scan. `boot(cfg)` runs
     once when the script starts. `install()` runs immediately at registration, while
     the script is loading.
-  - `load` accepts only `'eager'` in 1.6.0. It is a placeholder for lazy-loaded
-    sections later.
+  - `load` is `'eager'` (global script) or `'chunk'` (a lazy bundle, 1.7.0).
 - Current order: visitor pass `markdown` 10 → `code-copy` 20 → `video-render` 30 →
-  `sns-embed` 40 → `link-card` 50; editor pass `video-upload` 10 → `image-paste` 20 →
-  `upload-guards` 30; `editor-style` has `boot` and `editorEnd`; `code-format` has
-  `install`. A section that reads another section's result must use a larger order.
+  `sns-embed` 40 → `link-card` 50, then (view bundle, `visitorEnd`) `view-fold` 100 →
+  `view-readtime` 110 → `view-toc` 120 → `view-lightbox` 130; editor pass
+  `video-upload` 10 → `image-paste` 20 → `upload-guards` 30, then (write bundle)
+  `write-draft` 40 → `write-count` 50; `editor-style` has `boot` and `editorEnd`;
+  `code-format` has `install`. A section that reads another section's result must use
+  a larger order.
+- **Lazy bundles (`07-chunks.js`).** `declareChunk({ name, phase, want(cfg), where() })`
+  in the global script decides when to add `<script data-ck5sp-chunk>` (URL from the
+  core public asset route plus `cache_version`). The bundle file calls
+  `window.__G7Ckeditor5Superpack.chunk(name, function (core) { … })` and registers
+  `load: 'chunk'` sections; both scans then run again. Chunk sections get no `boot`.
+  Helpers a bundle can use from `core`: `t`, `esc`, `warnOnce`, `logger`,
+  `readSettings`, `isEditingArea`, `editorInstanceNear`, `findMainBody`, `routeKind`,
+  `isPostEditorEl`, `authToken`, `whenVisible`, `writeConfig`, `ns`.
+- **Shared visibility observer.** `core.whenVisible(el, fn)` calls `fn(el)` once when
+  `el` comes within 400px of the viewport (one `IntersectionObserver` for all
+  features; immediate without the API). Detached targets are released on each visitor
+  scan.
+- **Editor config hooks.** `core.editorConfig(fn(el, cfg) → cfg)` adds a hook to the
+  `ClassicEditor.create` wrapper (code formatting is the first hook);
+  `core.editorConfigWait(fn(el) → Promise|null)` lets creation wait briefly (each hook
+  caps its own wait). The post editor is `div[id^="ckeditor5-"]` (sirsoft-ckeditor5
+  1.1) or the older `.ckeditor5-wrapper`; `isPostEditorEl()` excludes the comment
+  editor.
 - The scheduler (`08-scheduler.js`) owns the only MutationObserver (on
   `document.body`, `childList` + `subtree`). An added node that is, is inside, or
   contains `.ck-content` requests a visitor scan after 200 ms, restarted on every
   such change. Every change requests an editor scan after 250 ms, a fixed window
   that ignores changes while it is pending. Boot runs both scans after two animation
   frames, then again at 400 ms and 900 ms. Sections must not add their own observers
-  or scan timers.
+  or scan timers (use `core.whenVisible` for "when it comes into view").
 - Safety rule: if a hook throws, only that section is skipped and
   `warnOnce(tag, reason)` logs a single `console.warn`; the rest keeps running. A
   section that touches the editor should also do nothing and leave the editor as it
@@ -496,18 +620,25 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
 
 ### Tests
 
-- `node --test tests/js/*.test.mjs` runs the shipped script on a fake editor. It needs a DOM from
-  `happy-dom`, which this repository does not install: set `HAPPY_DOM_FROM=<folder with happy-dom
-  installed>/package.json`. Without it the tests are skipped and print why. No network is used.
+- `node --test tests/js/*.test.mjs` runs the JS tests. `upload-guards.test.mjs` runs the shipped
+  script on a fake editor and needs a DOM from `happy-dom`, which this repository does not install:
+  set `HAPPY_DOM_FROM=<folder with happy-dom installed>/package.json`; without it those tests are
+  skipped and print why. The 1.7.0 tests (`core-chunks`, `view-*`, `write-*`) need no DOM: they
+  load the built files in a `node:vm` context through `tests/js/harness.mjs` and test the pure
+  functions each piece puts in `core.ns(...)`. No network is used.
+- PHP unit tests in `tests/Unit` need no database (`tests/Feature` does).
 - `tests/` is not included in release archives.
 
 ## <a name="사용법-한국어"></a>사용법 (한국어)
 
-**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 7개, 기능별로 하나씩.
+**관리자 → 플러그인 → CKEditor 5 슈퍼팩 → 설정** 으로 이동합니다. 탭 9개(좁은 화면에서는 탭 줄이 줄바꿈됩니다).
 
 - **SNS 임베드** — 본문에 YouTube·X·Instagram·TikTok 링크를 **한 줄에 단독으로** 붙여넣으면
   방문자 화면에서 임베드로 표시됩니다. 임베드 아래에는 항상 원문 링크 버튼이 남습니다.
   설정: 전체 온/오프 · 플랫폼별 온/오프 · YouTube Shorts 세로 비율.
+  1.7.0(설정 없음, 업데이트하면 기존 글에도 적용): YouTube 는 처음에 썸네일(유튜브 이미지 서버)과 재생 버튼만
+  보이고, 누르면 그 자리에 `youtube-nocookie` 플레이어가 만들어져 재생됩니다. X·Instagram·TikTok 스크립트와
+  로컬 동영상 플레이어는 화면 가까이 왔을 때 연결합니다. 봇 화면은 바뀌지 않습니다.
 - **외부 링크 카드화** — 임베드 대상이 아닌 일반 외부 링크를 대표이미지+제목+요약+도메인
   카드(또는 파비콘+제목+도메인 최소 카드)로 바꿉니다. 메타 취득은 서버가 대행하고 캐시합니다.
   설정: 전체 온/오프 · 최소 카드 온/오프 · 이미지 크기 · 성공/실패 캐시 보존기간.
@@ -522,6 +653,10 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
   - 압축 응답과 HTML이 아닌 응답은 받지 않습니다. 본문은 1 MiB까지만 받고, 전체 대기 시간은 8초입니다.
   - 실제 외부 요청 빈도를 제한합니다(사이트 전체 분당 120회, 대상 호스트당 분당 20회).
     한도를 넘으면 실패로 응답하고 캐시에 남기지 않습니다.
+  - 1.7.0: 멀티캐스트 대역(`224.0.0.0/4`, `ff00::/8`)도 막습니다. 주소 판정에서 거절된 주소는 DB 실패 행을
+    만들지 않고 10분 동안만 임시 캐시에 기억합니다. 봇 차단 챌린지 페이지(Cloudflare "Just a moment…" 등)는
+    카드로 만들지 않고 어디에도 저장하지 않습니다. EUC-KR 등 UTF-8 이 아닌 페이지는 응답·`<meta>` 문자셋에 맞춰
+    바꿔 읽습니다.
   - 캐시 정리 명령 `g7-ckeditor5-superpack:prune-link-previews`가 매일 실행됩니다.
     보존기간이 지난 행을 지우고, 테이블을 최대 5만 행으로 유지합니다.
     `--dry-run`을 붙이면 지우지 않고 건수만 봅니다.
@@ -575,6 +710,19 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
   1.5초간 체크 표시로 바뀝니다. 인라인 코드·편집기에는 붙지 않고, 인쇄 시 숨겨지며, 설정과
   무관하게 항상 표시됩니다.
 
+- **글 보기**(1.7.0, 모두 기본 꺼짐) — 글 상세 화면의 글 본문에만 적용됩니다(페이지·답글의 원글 상자·약관 창·댓글 제외).
+  하나라도 켜면 글 보기 화면에서 작은 파일(`dist/js/view.js`) 하나를 더 불러옵니다.
+  - **목차**: 제목(툴바 제목·마크다운 제목)이 3개 이상이면 본문 첫머리에 접을 수 있는 목차를 만들고, 누르면 그 제목으로 이동합니다(제목 id 는 화면에서만 붙임).
+  - **이미지 확대 보기**: 본문 이미지를 누르면 새 탭 대신 화면 위에 크게 보이고 좌우 버튼·화살표 키·밀기로 넘깁니다. 다른 주소로 직접 건 링크 이미지는 그대로 둡니다.
+  - **접기/펼치기**: `[접기] 제목` 한 줄과 `[/접기]` 한 줄 사이를 접힌 상자로 보여 줍니다. **끄면 기존 글에 표식 글자가 그대로 보입니다**(봇 화면·목록 요약에는 늘 글자로 보임).
+  - **읽는 시간**: 본문 첫머리에 "약 N분"(한국어 1분 500자, 영어 200단어, 이미지 1장 6초).
+  - 본문 판별: 템플릿이 본문(또는 그 조상)에 `data-g7-post-body` 속성이나 `g7-post-body` 클래스를 달면 그것을 씁니다.
+    표식이 없으면 대부분의 템플릿에서 글 상세 주소의 "글 버튼 줄(`[data-g7-anchor="post-actions"]`) 앞 마지막 본문"으로 찾으니, 쓰는 템플릿에서 확인하세요.
+- **글쓰기 도우미**(1.7.0, 모두 기본 꺼짐) — 로그인한 사용자의 사용자 글쓰기·수정 화면 게시글 본문 에디터에만 적용됩니다(댓글 입력창·관리자 화면 제외).
+  이 설정은 방문자 화면 설정에 싣지 않고, 글쓰기 화면이 로그인 사용자 전용 주소로 묻습니다.
+  - **임시 저장·복구**: 제목·본문을 이 브라우저에 저장하고 다시 열면 [복구]/[버리기]를 묻습니다. 등록하면 지워지고 7일 뒤 만료(글 하나 500KB, 최대 10개). 비밀글로 체크하면 저장하지 않고 남은 임시본도 지웁니다. 업로드 중에는 저장을 미룹니다(CKEditor Autosave 는 업로드 보호와 충돌해 쓰지 않음).
+  - **글자 수 표시**: 에디터 아래에 "글자 N · 공백 제외 M"(빌드 내장 WordCount).
+
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
 
 ### 개발
@@ -593,9 +741,14 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
 | `90` | `90-boot.js` | 부팅(`init`, 핸들러 등록, `window.__G7Ckeditor5Superpack`) |
 | `99` | `99-tail.js` | IIFE 닫기 |
 
+지연 로드 묶음(1.7.0)은 같은 번호 규칙으로 따로 둡니다: `resources/js/view/` → `dist/js/view.js`(글 보기),
+`resources/js/write/` → `dist/js/write.js`(글쓰기 도우미). 전역 스크립트(`07-chunks.js`)가 기능이 켜져 있고
+그 화면일 때만 `<script>` 하나로 불러오고, 묶음 파일은 `window.__G7Ckeditor5Superpack.chunk(이름, function (core) {…})`
+안에서 `load: 'chunk'` 섹션을 등록합니다. 화면 진입은 공용 관찰자 `core.whenVisible(el, fn)` 하나로 봅니다.
+
 - `scripts/build-js.sh`가 조각을 이름 순으로 이어 붙여 `dist/js/plugin.iife.js`와
-  `resources/js/index.js` 두 곳에 씁니다(두 파일은 항상 같습니다). `--check`를 붙이면 파일을
-  쓰지 않고, 어느 한쪽이라도 결합 결과와 다르면 `1`로 끝납니다.
+  `resources/js/index.js` 두 곳(두 파일은 항상 같습니다), 그리고 묶음별 `dist/js/` 파일에 씁니다.
+  `--check`를 붙이면 파일을 쓰지 않고, 하나라도 결합 결과와 다르면 `1`로 끝납니다.
 - 조각을 고친 뒤에는 반드시 `scripts/build-js.sh`를 실행하고 다시 만든 파일을 함께
   커밋합니다. npm·번들러는 쓰지 않습니다. `scripts/`는 릴리스 압축 파일에 들어가지 않습니다.
 
@@ -612,10 +765,13 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
   - `gate(cfg)`: 게이트가 참인 섹션이 하나도 없으면, 게이트가 없는 섹션만 문서 전체에 한 번 돕니다(지금은 코드 복사).
   - `editor(container)`는 편집기가 살아 있는 게시글 본문 에디터 컨테이너마다 `editorOrder` 순으로 불립니다.
     `editorEnd()`는 편집기 스캔마다 끝에 불립니다. `boot(cfg)`는 시작할 때 한 번, `install()`은 등록하는 즉시(스크립트를 불러오는 중에) 불립니다.
-  - `load`는 1.6.0에서 `'eager'`만 받습니다. 나중에 섹션을 늦게 불러올 자리입니다.
+  - `load`는 `'eager'`(전역 스크립트) 또는 `'chunk'`(지연 로드 묶음, 1.7.0)입니다.
 - 지금 순서: 방문자 `markdown` 10 → `code-copy` 20 → `video-render` 30 → `sns-embed` 40 → `link-card` 50,
-  편집기 `video-upload` 10 → `image-paste` 20 → `upload-guards` 30. `editor-style`은 `boot`·`editorEnd`,
-  `code-format`은 `install`을 씁니다. 다른 섹션의 결과를 읽는 섹션은 그보다 큰 순서 값을 씁니다.
+  이어서(글 보기 묶음, `visitorEnd`) `view-fold` 100 → `view-readtime` 110 → `view-toc` 120 → `view-lightbox` 130.
+  편집기 `video-upload` 10 → `image-paste` 20 → `upload-guards` 30, 이어서(글쓰기 묶음) `write-draft` 40 → `write-count` 50.
+  `editor-style`은 `boot`·`editorEnd`, `code-format`은 `install`을 씁니다. 다른 섹션의 결과를 읽는 섹션은 그보다 큰 순서 값을 씁니다.
+- 에디터 생성 설정 보강: `core.editorConfig(fn)`(코드 서식이 첫 항목), 생성 전 잠깐 기다릴 것 `core.editorConfigWait(fn)`.
+  게시글 본문 에디터는 `div[id^="ckeditor5-"]`(sirsoft-ckeditor5 1.1) 또는 옛 `.ckeditor5-wrapper` 이고, 댓글 에디터는 제외합니다(`isPostEditorEl`).
 - 스케줄러(`08-scheduler.js`)가 유일한 MutationObserver(`document.body`, `childList` + `subtree`)를 가집니다.
   `.ck-content`이거나 그 안이거나 그것을 품은 노드가 추가되면 방문자 스캔을 200ms 뒤로 요청하고, 그런 변경마다 다시 잡습니다.
   모든 변경은 편집기 스캔을 250ms 뒤로 요청합니다(대기 중에는 새 요청을 버리는 고정 창).
@@ -632,7 +788,7 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
 2. 등록 항목을 채웁니다: `name`, `scope`, `order`·`editorOrder`, `load: 'eager'`, 켜고 끄는 설정이 있으면 `gate`·`enabled`,
    `styles`(만드는 `<style>` id), 필요한 훅.
 3. 도우미는 새로 만들지 말고 코어의 것(`readSettings`·`t`·`esc`·`warnOnce`·`isEditingArea`·`editorInstanceNear` 등)을 씁니다.
-   MutationObserver나 스캔 타이머를 새로 만들지 않습니다.
+   MutationObserver나 스캔 타이머를 새로 만들지 않습니다(화면 진입은 `core.whenVisible`).
 4. 설정이 있으면 여덟 곳을 모두 고칩니다.
    1. `plugin.php` `getSettingsSchema()`(형식·기본값·라벨)
    2. `plugin.php` `getConfigValues()` 기본값
@@ -649,9 +805,11 @@ Names are sorted with `LC_ALL=C`, and the number band says what a piece is:
 
 #### 테스트
 
-- `node --test tests/js/*.test.mjs` 는 배포 스크립트를 가짜 편집기 위에서 돌립니다. DOM 은 `happy-dom` 을 쓰는데
-  이 저장소에는 설치하지 않으므로 `HAPPY_DOM_FROM=<happy-dom 이 설치된 폴더>/package.json` 으로 알려 줍니다.
-  지정하지 않으면 사유를 출력하고 건너뜁니다. 네트워크는 쓰지 않습니다.
+- `node --test tests/js/*.test.mjs` 가 JS 시험을 돌립니다. `upload-guards.test.mjs` 는 배포 스크립트를 가짜 편집기 위에서
+  돌리며 DOM 으로 `happy-dom` 을 쓰는데, 이 저장소에는 설치하지 않으므로 `HAPPY_DOM_FROM=<happy-dom 이 설치된 폴더>/package.json`
+  으로 알려 줍니다(없으면 사유를 출력하고 건너뜀). 1.7.0 시험(`core-chunks`, `view-*`, `write-*`)은 DOM 없이
+  `tests/js/harness.mjs` 로 배포 파일을 `node:vm` 에서 읽어 각 조각의 순수 함수(`core.ns(...)`)를 시험합니다. 네트워크는 쓰지 않습니다.
+- `tests/Unit` 의 PHP 시험은 DB 가 필요 없습니다(`tests/Feature` 는 필요).
 - `tests/` 는 릴리스 아카이브에 들어가지 않습니다.
 
 ## Acknowledgments
