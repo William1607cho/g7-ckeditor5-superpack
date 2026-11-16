@@ -294,6 +294,49 @@
     return most;
   }
 
+  /* ---------------------------------------------------------------- *
+   *  CKEditor 「Powered by」 배지 판정 (1.7.1) — 배지를 따지는 곳은 여기 한 곳뿐이다
+   * ---------------------------------------------------------------- */
+
+  /**
+   * sirsoft-ckeditor5 가 싣는 CKEditor 5(43.x)는 라이선스 키가 없거나 'GPL' 이면, 편집 중(포커스)에
+   * 「Powered by CKEditor」 배지를 편집 영역 오른쪽 아래 **테두리 위**(위치 'border', 기본값)에 띄운다.
+   * 배지 높이의 절반쯤이 편집 영역 아래로 내려와, 에디터 바로 아래에 붙는 우리 표시(글자 수)를 가린다.
+   * 배지는 라이선스 표시라 숨기지 않는다. 내려오는지만 판정하고, 표시 쪽이 여백을 둔다.
+   *
+   * 순수 함수. info = { hasPoweredBy, forceVisible, licenseKey, position }
+   *  - hasPoweredBy: 에디터 UI 에 배지 기능이 있는가(배지 기능이 없는 판은 false → 여백 없음)
+   *  - 뜨는 조건(43.x): forceVisible 이거나 라이선스 키가 없거나 'GPL'(유료 키는 유효하다고 본다)
+   *  - 위치 'inside' 는 편집 영역 안에 떠서 아래 표시와 겹치지 않는다. 'border'(기본)만 true.
+   */
+  function badgeHangsBelow(info) {
+    if (!info || !info.hasPoweredBy) return false;
+    var pos = info.position == null || info.position === '' ? 'border' : String(info.position);
+    if (pos !== 'border') return false;
+    if (info.forceVisible) return true;
+    var key = info.licenseKey;
+    return key == null || key === '' || key === 'GPL';
+  }
+
+  /** 에디터 인스턴스에서 판정 재료를 읽는다. 읽지 못하면 '배지 없음' 쪽으로 둔다. */
+  function poweredByInfo(editor) {
+    var info = { hasPoweredBy: false, forceVisible: false, licenseKey: null, position: null };
+    if (!editor || !editor.ui || !editor.ui.poweredBy || !editor.config || typeof editor.config.get !== 'function') return info;
+    info.hasPoweredBy = true;
+    try {
+      var pb = editor.config.get('ui.poweredBy') || {};
+      info.forceVisible = !!pb.forceVisible;
+      info.position = pb.position || null;
+    } catch (e) { /* 기본값(border) */ }
+    try { info.licenseKey = editor.config.get('licenseKey'); } catch (e) { info.licenseKey = null; }
+    return info;
+  }
+
+  /** 에디터 바로 아래에 붙는 우리 표시가 배지를 피해야 하는가 — 모든 기능이 이것만 쓴다(1.7.1). */
+  function poweredByBadgeBelow(editor) {
+    return badgeHangsBelow(poweredByInfo(editor));
+  }
+
   function scanEditors() {
     // 동영상 업로드 바/이미지 복붙 둘 다 켜짐 여부를 각자 내부에서
     // 확인하므로(attachUploaderTo, attachPasteImageHandlerTo) 여기선 컨테이너 존재만
@@ -580,6 +623,8 @@
   core.postEditorCss = postEditorCss;
   core.currentUserUuid = currentUserUuid;
   core.writeWanted = writeWanted;
+  core.badgeHangsBelow = badgeHangsBelow;
+  core.poweredByBadgeBelow = poweredByBadgeBelow;
 
   /* ================================================================ *
    *  통합 스캔

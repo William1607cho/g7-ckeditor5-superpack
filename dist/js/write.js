@@ -24,6 +24,9 @@
    *  - 글자는 에디터 모델의 글자 노드를 모아 센다(문단 사이는 세지 않음). 이모지 등 합쳐진 글자는
    *    코드 포인트 단위다(순수 함수 `core.ns('count').countChars`).
    *  - 댓글 에디터는 본문 에디터 컨테이너(코어 `isPostEditorEl`) 밖이라 편집기 스캔 대상이 아니다.
+   *  - 1.7.1: CKEditor 「Powered by」 배지가 편집 영역 아래로 내려오는 판이면(판정은 코어
+   *    `poweredByBadgeBelow` 한 곳) 줄 위 여백을 늘려 배지 아래로 내린다. 배지는 숨기지 않는다.
+   *    배지 높이 16px 의 절반(8px)이 테두리 아래로 내려오므로 여백 14px = 8px + 간격 6px.
    */
   (function (core) {
     'use strict';
@@ -50,8 +53,14 @@
         .replace('{nospace}', fmt(c.withoutSpaces));
     }
 
+    /** 이 에디터 아래 줄이 배지를 피해야 하는가. 판정은 코어 한 곳(옛 전역 스크립트에 없으면 false). */
+    function clearBadge(editor) {
+      try { return typeof core.poweredByBadgeBelow === 'function' && !!core.poweredByBadgeBelow(editor); } catch (e) { return false; }
+    }
+
     core.ns('count').countChars = countChars;
     core.ns('count').label = label;
+    core.ns('count').clearBadge = clearBadge;
 
     /** 에디터 모델의 글자를 모은다(문단 경계는 이어 붙이지 않는다) */
     function modelText(editor) {
@@ -73,6 +82,7 @@
       el.id = STYLE_ID;
       el.textContent = ''
         + '.ck5sp-count{margin-top:.35em;text-align:right;font-size:.75rem;line-height:1.4;color:#6b7280;font-variant-numeric:tabular-nums;}'
+        + '.ck5sp-count.ck5sp-count--badge{margin-top:14px;}'
         + 'html.dark .ck5sp-count{color:#9ca3af;}';
       document.head.appendChild(el);
     }
@@ -91,7 +101,7 @@
       if (nextEl && nextEl.getAttribute('data-ck5sp-write') === 'count') return;
       injectStyle();
       var line = document.createElement('div');
-      line.className = 'ck5sp-count';
+      line.className = clearBadge(editor) ? 'ck5sp-count ck5sp-count--badge' : 'ck5sp-count';
       line.setAttribute('data-ck5sp-write', 'count');
       line.setAttribute('aria-live', 'polite');
       parent.insertBefore(line, container.nextSibling);

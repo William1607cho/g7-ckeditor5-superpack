@@ -129,4 +129,6 @@
   core.postEditorCss = postEditorCss;
   core.currentUserUuid = currentUserUuid;
   core.writeWanted = writeWanted;
+  core.badgeHangsBelow = badgeHangsBelow;
+  core.poweredByBadgeBelow = poweredByBadgeBelow;
 
