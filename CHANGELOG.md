@@ -5,6 +5,45 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-11-16
+
+### Fixed
+
+- **The character count was hidden behind the "Powered by CKEditor" badge.** The
+  CKEditor build shipped with `sirsoft-ckeditor5` (no license key) shows a "Powered
+  by CKEditor" badge on the bottom-right border of the editing area while you type.
+  Half of the badge hangs below the editor and covered the right end of the
+  character count line. When the editor has that badge, the count line now sits
+  14px below the editor (the lower half of the badge plus a small gap); without the
+  badge it keeps its old spacing. The badge itself is not hidden or moved, and
+  `sirsoft-ckeditor5` is not changed. The draft notice and the video upload bar sit
+  above the editor and were not affected.
+
+### Notes
+
+- **Core 7.1.6 "Insert media" button.** A video added with that button (an external
+  video address, CKEditor *mediaEmbed*) is saved in the core's own format, which this
+  plugin does not process: it gets neither the YouTube thumbnail-first player nor
+  the lazy connection. Paste the link on its own line instead (the superpack
+  embed). To hide the core button, turn off external video embedding in the admin
+  **Body content** settings. Documentation only.
+- **Video upload does not follow the board's "Use file attachments" setting.**
+  Upload requests carry no board, so the upload endpoints (admin only) accept files
+  on any write screen. Documented as a known limitation; no code change.
+
+### Internal
+
+- One check in the global script decides whether the badge hangs below the editor
+  (`badgeHangsBelow`, pure; `poweredByBadgeBelow`, reads the editor's
+  `ui.poweredBy`, `ui.poweredBy` config and `licenseKey`). Bundles get it as a core
+  helper; with an older global script the count line keeps the old spacing.
+
+### Tests
+
+- `tests/js/powered-by.test.mjs`: the badge check (no badge feature, no key / GPL,
+  paid key, `forceVisible`, `inside` position, unreadable config) and the count
+  line class and spacing (`node --test`, no DOM).
+
 ## [1.7.0] - 2026-11-10
 
 ### Changed (no setting — applies to existing posts after updating)
