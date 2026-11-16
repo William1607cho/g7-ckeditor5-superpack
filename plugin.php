@@ -50,6 +50,8 @@ use Plugins\G7\Ckeditor5\Superpack\Listeners\ImagePasteWebpConversionListener;
  *     `dist/js/write.js`. 방문자 설정에는 켜짐 여부 2개만 싣고, 로그인 사용자의 글쓰기 화면에서만 불러온다.
  *  (1.7.0, 설정 없음) 유튜브는 썸네일+재생 버튼으로 먼저 보이고, 임베드·동영상은 화면에 들어올 때 연결한다.
  *  (1.7.0) 링크 프리뷰: 멀티캐스트 차단, 거절 주소는 10분 임시 캐시, 봇 챌린지 페이지 미저장, 문자셋 변환.
+ *  (1.7.1, 설정 없음) 글자 수 줄이 CKEditor 「Powered by」 배지(편집 중 에디터 오른쪽 아래 테두리)에 가리지 않게
+ *     배지가 있는 에디터에서만 줄을 조금 내린다(배지 판정은 전역 스크립트 한 곳, 배지는 그대로 둔다). PHP 변경 없음.
  *
  * 아키텍처: 프론트 렌더 로직은 `loading.strategy = global` 로 전 페이지에 로드되는
  * `dist/js/plugin.iife.js` 가 `.ck-content` 를 자체 스캔(+MutationObserver)해 수행한다.

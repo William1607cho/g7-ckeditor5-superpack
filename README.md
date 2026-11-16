@@ -96,8 +96,8 @@ Turning a feature off in the settings makes the script skip that scan entirely.
 cd /path/to/gnuboard7/plugins
 
 # a release tag (recommended)
-curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.7.0.tar.gz | tar xz
-mv g7-ckeditor5-superpack-1.7.0 g7-ckeditor5-superpack
+curl -L https://github.com/William1607cho/g7-ckeditor5-superpack/archive/refs/tags/v1.7.1.tar.gz | tar xz
+mv g7-ckeditor5-superpack-1.7.1 g7-ckeditor5-superpack
 
 # ...or the latest main
 git clone https://github.com/William1607cho/g7-ckeditor5-superpack.git
@@ -149,6 +149,13 @@ thumbnail (`i.ytimg.com`, lazy, no referrer) and a play button; the player is
 created only when the visitor clicks. X, Instagram and TikTok scripts are requested
 only when the first embed comes near the viewport, and local video players are
 created at that moment too. Bot (SSR) pages are unchanged.
+
+**Core 7.1.6 "Insert media" button:** a video added with the editor's **Insert media**
+button (an external video address, CKEditor *mediaEmbed*) is saved in the core's own
+format, which this plugin does not process — it gets neither the YouTube
+thumbnail-first player nor the lazy connection above. Paste the link on its own line
+instead (the superpack embed). To hide the core button, turn off external video
+embedding in the admin **Body content** settings.
 
 **Settings:** master on/off · per-platform on/off · YouTube Shorts aspect ratio
 (9:16 / 1:1 / 4:5 / 16:9 — the URL alone cannot tell the real orientation, so
@@ -436,7 +443,10 @@ the draft limits below are fixed in the code.
   submit button disabled through the upload guard.
 - **Character count** — "N characters · M without spaces" under the editor,
   updated by the CKEditor build's own WordCount plugin (added to the post editor
-  only when this is on).
+  only when this is on). Since 1.7.1 the line keeps clear of the "Powered by
+  CKEditor" badge that the editor shows on its bottom-right border while you type:
+  when the editor has that badge, the line sits a little lower. The badge itself is
+  left as it is (license notice).
 
 ## Settings screen
 
@@ -473,6 +483,13 @@ last two have one switch per feature:
   player.
 - A legacy `<figure class="media"><oembed url>` shape saved by an older setup is
   still recognised on view, but the current editor never produces it.
+- **Videos from the core "Insert media" button (core 7.1.6) are left to the core.**
+  They get no YouTube thumbnail-first player and no lazy connection. Paste the link
+  on its own line instead, or turn off external video embedding in the admin
+  **Body content** settings to hide the core button (see *SNS embeds*).
+- **Video upload ignores the board's "Use file attachments" setting.** Upload
+  requests carry no board, so the upload endpoints (admin only) accept files on any
+  write screen, including boards with attachments turned off.
 - SNS embeds that negotiate their height over `postMessage` (X, Instagram) can
   briefly collapse to `0px` when the same page is reloaded many times in quick
   succession; a normal single view is fine, and the "view on …" link is always
@@ -643,6 +660,10 @@ global script:
   1.7.0(설정 없음, 업데이트하면 기존 글에도 적용): YouTube 는 처음에 썸네일(유튜브 이미지 서버)과 재생 버튼만
   보이고, 누르면 그 자리에 `youtube-nocookie` 플레이어가 만들어져 재생됩니다. X·Instagram·TikTok 스크립트와
   로컬 동영상 플레이어는 화면 가까이 왔을 때 연결합니다. 봇 화면은 바뀌지 않습니다.
+  코어 7.1.6 「미디어 넣기」 안내: 에디터의 「미디어 넣기」 단추(외부 영상 주소 넣기, CKEditor mediaEmbed)로 넣은
+  영상은 코어 형식으로 저장되고 슈퍼팩이 처리하지 않아, 위의 유튜브 썸네일(먼저 보이기)과 지연 연결이 적용되지
+  않습니다. 링크를 한 줄에 단독으로 붙여넣는 슈퍼팩 임베드를 쓰세요. 코어 단추를 숨기려면 관리자 「본문 콘텐츠」
+  설정에서 외부 영상 삽입을 끄세요.
 - **외부 링크 카드화** — 임베드 대상이 아닌 일반 외부 링크를 대표이미지+제목+요약+도메인
   카드(또는 파비콘+제목+도메인 최소 카드)로 바꿉니다. 메타 취득은 서버가 대행하고 캐시합니다.
   설정: 전체 온/오프 · 최소 카드 온/오프 · 이미지 크기 · 성공/실패 캐시 보존기간.
@@ -669,6 +690,7 @@ global script:
   있습니다. 방문자 화면에서는 링크가 재생 플레이어로 바뀝니다. `.mp4` 는 항상, `.mov`·`.webm` 은
   기본 허용, `.m4v` 는 옵트인. 확장자와 실제 매직바이트가 일치해야 통과합니다. HEVC(H.265) `.mov`
   는 일부 브라우저에서 재생되지 않습니다(트랜스코딩 없음). 자동 삭제 보관기간은 기본 0(무기한).
+  업로드는 관리자만 할 수 있고, 업로드 요청에 게시판 정보가 없어 게시판의 「파일 첨부 사용」 설정과 상관없이 받습니다.
 - **마크다운 자동 변환** — 붙여넣은 `##`, `**굵게**` 같은 기호를 방문자 화면에서 실제 서식으로
   바꿉니다. 본문 원문은 그대로 저장됩니다. 지원: 제목 / 굵게 / 기울임(기본 OFF) / 목록(2줄 이상
   연속) / 링크 / 코드 / 인용구 / 표(GFM, 첫 행은 헤더) / 구분선(`---`, 항상 `<hr>`, 끄면 원문 글자 그대로),
@@ -726,7 +748,8 @@ global script:
   방문자 화면 설정에는 켜짐 여부 2개(`write_draft_enabled`·`write_count_enabled`)만 싣고, 로그인한 사용자의 글쓰기 화면에서만
   작은 파일(`dist/js/write.js`) 하나를 더 불러옵니다(둘 다 끄면 추가 요청 없음). 글 보기 4개도 켜짐 여부만 싣습니다.
   - **임시 저장·복구**: 제목·본문을 이 브라우저에 저장하고 다시 열면 [복구]/[버리기]를 묻습니다. 등록하면 지워지고 7일 뒤 만료(글 하나 500KB, 최대 10개). 비밀글로 체크하면 저장하지 않고 남은 임시본도 지웁니다. 업로드 중에는 저장을 미룹니다(CKEditor Autosave 는 업로드 보호와 충돌해 쓰지 않음).
-  - **글자 수 표시**: 에디터 아래에 "글자 N · 공백 제외 M"(빌드 내장 WordCount).
+  - **글자 수 표시**: 에디터 아래에 "글자 N · 공백 제외 M"(빌드 내장 WordCount). 1.7.1 부터 편집 중 에디터 오른쪽 아래
+    테두리에 뜨는 「Powered by CKEditor」 배지에 가리지 않습니다. 배지가 있는 에디터면 줄이 조금 아래에 놓입니다(배지는 라이선스 표시라 그대로 둡니다).
 
 각 기능을 끄면 해당 처리를 완전히 건너뜁니다. `sirsoft-ckeditor5` 는 전혀 수정하지 않습니다.
 
